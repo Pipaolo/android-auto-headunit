@@ -43,6 +43,8 @@ class HomeFragment : Fragment(), UsbReceiver.Listener {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        usbManager = requireContext().getSystemService(Context.USB_SERVICE) as UsbManager
+
         usbStatusText = view.findViewById(R.id.tile_usb_status)
 
         // USB Connect tile
@@ -59,6 +61,24 @@ class HomeFragment : Fragment(), UsbReceiver.Listener {
         view.findViewById<View>(R.id.tile_exit).setOnClickListener {
             requireActivity().finish()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        usbReceiver = UsbReceiver(this)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requireContext().registerReceiver(usbReceiver, UsbReceiver.createFilter(), Context.RECEIVER_EXPORTED)
+        } else {
+            requireContext().registerReceiver(usbReceiver, UsbReceiver.createFilter())
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        usbReceiver?.let {
+            requireContext().unregisterReceiver(it)
+        }
+        usbReceiver = null
     }
 
     private fun onUsbConnectClicked() {
