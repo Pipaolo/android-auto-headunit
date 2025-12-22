@@ -116,7 +116,7 @@ class UsbAccessoryConnection(private val usbMgr: UsbManager, private val device:
     override val isConnected: Boolean
         get() {
             synchronized(device) {
-                return usbDeviceConnection == null
+                return usbDeviceConnection != null
             }
         }
 
@@ -127,20 +127,34 @@ class UsbAccessoryConnection(private val usbMgr: UsbManager, private val device:
      */
     override fun write(buf: ByteArray, offset: Int, length: Int, timeout: Int) = useUsbDeviceConnection {
         try {
-            it.bulkTransfer(outEndpoint, buf, offset, length, timeout)
+            val result = it.bulkTransfer(outEndpoint, buf, offset, length, timeout)
+            if (result < 0) {
+                AppLog.e { "USB write failed: result=$result, length=$length, timeout=$timeout, endpoint=${outEndpoint?.address}" }
+            }
+            result
         } catch (e: NullPointerException) {
             disconnect()
             AppLog.e(e)
+            -1
+        } catch (e: Exception) {
+            AppLog.e { "USB write exception: ${e.message}" }
             -1
         }
     }
 
     override fun read(buf: ByteArray, offset: Int, length: Int, timeout: Int) = useUsbDeviceConnection {
         try {
-            it.bulkTransfer(inEndpoint, buf, offset, length, timeout)
+            val result = it.bulkTransfer(inEndpoint, buf, offset, length, timeout)
+            if (result < 0) {
+                AppLog.e { "USB read failed: result=$result, length=$length, timeout=$timeout, endpoint=${inEndpoint?.address}" }
+            }
+            result
         } catch (e: NullPointerException) {
             disconnect()
             AppLog.e(e)
+            -1
+        } catch (e: Exception) {
+            AppLog.e { "USB read exception: ${e.message}" }
             -1
         }
     }

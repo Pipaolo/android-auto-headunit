@@ -47,6 +47,8 @@
     <string name="usb_status_accessory_mode">Accessory mode</string>
     <string name="usb_status_ready_to_connect">Ready</string>
     <string name="usb_status_requesting_permission">Requesting permission…</string>
+    <string name="usb_already_connected">Already connected</string>
+    <string name="usb_accessory_mode_failed">Failed to switch to accessory mode</string>
 
     <!-- Settings Categories -->
     <string name="settings_graphics">Graphics</string>

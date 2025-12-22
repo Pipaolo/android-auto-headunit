@@ -11,7 +11,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
@@ -84,7 +83,7 @@ class HomeFragment : Fragment(), UsbReceiver.Listener {
     private fun onUsbConnectClicked() {
         // Check if already connected
         if (App.provide(requireContext()).transport.isAlive) {
-            Toast.makeText(requireContext(), "Already connected", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), R.string.usb_already_connected, Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -184,7 +183,7 @@ class HomeFragment : Fragment(), UsbReceiver.Listener {
                 // UsbAttachedActivity will handle it, or we wait for re-attach
                 updateUsbStatus(getString(R.string.usb_status_ready))
             } else {
-                Toast.makeText(requireContext(), "Failed to switch to accessory mode", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), R.string.usb_accessory_mode_failed, Toast.LENGTH_SHORT).show()
                 updateUsbStatus(getString(R.string.usb_status_ready))
             }
         }
