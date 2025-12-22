@@ -41,6 +41,13 @@
     <string name="usb_status_connecting">Connecting…</string>
     <string name="usb_status_connected">Connected</string>
 
+    <!-- USB Device Selection -->
+    <string name="usb_no_devices_found">No USB devices found</string>
+    <string name="usb_select_device_title">Select USB Device</string>
+    <string name="usb_status_accessory_mode">Accessory mode</string>
+    <string name="usb_status_ready_to_connect">Ready</string>
+    <string name="usb_status_requesting_permission">Requesting permission…</string>
+
     <!-- Settings Categories -->
     <string name="settings_graphics">Graphics</string>
     <string name="settings_audio">Audio</string>
