@@ -38,13 +38,13 @@ class ServiceDiscoveryResponse(settings: Settings, densityDpi: Int) : AapMessage
                 service.id = Channel.ID_VID
                 service.mediaSinkService = Control.Service.MediaSinkService.newBuilder().also {
                     it.availableType = Media.MediaCodecType.VIDEO
-                    it.audioType = Media.AudioStreamType.NONE
+                    it.audioType = Media.AudioStreamType.AUDIO_STREAM_NONE
                     it.availableWhileInCall = true
                     it.addVideoConfigs(Control.Service.MediaSinkService.VideoConfiguration.newBuilder().apply {
                         marginHeight = 0
                         marginWidth = 0
                         codecResolution = settings.resolution
-                        frameRate = Control.Service.MediaSinkService.VideoConfiguration.VideoFrameRateType._30 // TODO settings option
+                        frameRate = Control.Service.MediaSinkService.VideoConfiguration.VideoFrameRateType.FPS_30 // TODO settings option
                         density = densityDpi // TODO maybe this needs adjusting?
                     }.build())
                 }.build()
@@ -69,7 +69,7 @@ class ServiceDiscoveryResponse(settings: Settings, densityDpi: Int) : AapMessage
                 service.id = Channel.ID_AUD
                 service.mediaSinkService = Control.Service.MediaSinkService.newBuilder().also {
                     it.availableType = Media.MediaCodecType.AUDIO
-                    it.audioType = Media.AudioStreamType.MEDIA
+                    it.audioType = Media.AudioStreamType.AUDIO_STREAM_MEDIA
                     it.addAudioConfigs(AudioConfigs[Channel.ID_AUD])
                 }.build()
             }.build()
@@ -79,7 +79,7 @@ class ServiceDiscoveryResponse(settings: Settings, densityDpi: Int) : AapMessage
                 service.id = Channel.ID_AU1
                 service.mediaSinkService = Control.Service.MediaSinkService.newBuilder().also {
                     it.availableType = Media.MediaCodecType.AUDIO
-                    it.audioType = Media.AudioStreamType.SPEECH
+                    it.audioType = Media.AudioStreamType.AUDIO_STREAM_SPEECH
                     it.addAudioConfigs(AudioConfigs[Channel.ID_AU1])
                 }.build()
             }.build()
@@ -89,7 +89,7 @@ class ServiceDiscoveryResponse(settings: Settings, densityDpi: Int) : AapMessage
                 service.id = Channel.ID_AU2
                 service.mediaSinkService = Control.Service.MediaSinkService.newBuilder().also {
                     it.availableType = Media.MediaCodecType.AUDIO
-                    it.audioType = Media.AudioStreamType.SYSTEM
+                    it.audioType = Media.AudioStreamType.AUDIO_STREAM_SYSTEM
                     it.addAudioConfigs(AudioConfigs[Channel.ID_AU2])
                 }.build()
             }.build()

@@ -65,7 +65,7 @@ interface AccessoryConnection {
     }
 
     companion object {
-        const val DEFAULT_TIMEOUT = 150 // ms
-        const val CONNECT_TIMEOUT = 1000 // ms
+        const val DEFAULT_TIMEOUT = 500 // ms - increased for modern phones
+        const val CONNECT_TIMEOUT = 2000 // ms - increased for modern phones
     }
 }

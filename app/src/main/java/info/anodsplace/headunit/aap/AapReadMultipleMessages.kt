@@ -21,8 +21,12 @@ internal class AapReadMultipleMessages(
 
     override fun doRead(connection: AccessoryConnection): Int {
         val size = connection.read(recv_buffer, 0, recv_buffer.size)
-        if (size <= 0) {
-            return 0
+        if (size < 0) {
+            AppLog.e { "USB read error in doRead: $size" }
+            return -1  // Propagate error to stop transport
+        }
+        if (size == 0) {
+            return 0  // Timeout, keep polling
         }
         try {
             processBulk(size, recv_buffer)

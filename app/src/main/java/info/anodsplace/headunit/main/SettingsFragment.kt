@@ -98,14 +98,14 @@ class SettingsFragment : Fragment() {
 
         binding.resolution.text = getString(R.string.resolution, settings.resolution)
         val items = arrayOf(
-                Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._800x480.name,
-                Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._1280x720.name,
-                Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._1920x1080.name
+                Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType.VIDEO_800x480.name,
+                Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType.VIDEO_1280x720.name,
+                Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType.VIDEO_1920x1080.name
         )
         val values = arrayOf(
-                Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._800x480,
-                Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._1280x720,
-                Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._1920x1080
+                Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType.VIDEO_800x480,
+                Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType.VIDEO_1280x720,
+                Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType.VIDEO_1920x1080
         )
 
         binding.resolution.setOnClickListener {

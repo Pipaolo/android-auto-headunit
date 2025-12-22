@@ -10,9 +10,9 @@ class Screen(val width: Int, val height: Int) {
 
         fun forResolution(resolutionType: Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType): Screen {
                 return when(resolutionType.number) {
-                    Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._800x480_VALUE -> _480
-                    Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._1280x720_VALUE -> _720
-                    Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._1920x1080_VALUE -> _1080
+                    Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType.VIDEO_800x480_VALUE -> _480
+                    Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType.VIDEO_1280x720_VALUE -> _720
+                    Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType.VIDEO_1920x1080_VALUE -> _1080
                     else -> _480
                 }
         }

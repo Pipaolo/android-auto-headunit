@@ -75,6 +75,10 @@ class UsbAccessoryConnection(private val usbMgr: UsbManager, private val device:
                 usbInterface = newUsbInterface
                 inEndpoint = newInEndpoint
                 outEndpoint = newOutEndpoint
+
+                AppLog.i { "USB connected successfully" }
+                AppLog.i { "  IN endpoint: address=${newInEndpoint.address}, maxPacketSize=${newInEndpoint.maxPacketSize}" }
+                AppLog.i { "  OUT endpoint: address=${newOutEndpoint.address}, maxPacketSize=${newOutEndpoint.maxPacketSize}" }
             } catch (e: Exception) {
                 if (newUsbInterface != null) {
                     newUsbDeviceConnection.releaseInterface(newUsbInterface)

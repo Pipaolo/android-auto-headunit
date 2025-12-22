@@ -70,11 +70,25 @@ object AapSslImpl: AapSsl {
         }
     }
 
+    fun isHandshakeComplete(): Boolean {
+        val status = sslEngine?.handshakeStatus
+        return status == javax.net.ssl.SSLEngineResult.HandshakeStatus.FINISHED ||
+               status == javax.net.ssl.SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING
+    }
+
     override fun handshakeRead(): ByteArray {
         require(sslEngine != null) { "SSL Engine not initialized - prepare() was not called" }
+        val engine = sslEngine!!
+
+        info.anodsplace.headunit.utils.AppLog.e { "handshakeRead: status=${engine.handshakeStatus}" }
+
+        // Keep wrapping until we have data to send or handshake is complete
         txBuffer!!.clear()
-        val result = sslEngine!!.wrap(emptyArray(), txBuffer)
-        runDelegatedTasks(result, sslEngine!!)
+        val result = engine.wrap(ByteBuffer.allocate(0), txBuffer)
+        runDelegatedTasks(result, engine)
+
+        info.anodsplace.headunit.utils.AppLog.e { "handshakeRead: wrap result=${result.status}, produced=${result.bytesProduced()}, hsStatus=${result.handshakeStatus}" }
+
         val resultBuffer = ByteArray(result.bytesProduced())
         txBuffer!!.flip()
         txBuffer!!.get(resultBuffer)
@@ -83,10 +97,45 @@ object AapSslImpl: AapSsl {
 
     override fun handshakeWrite(handshakeData: ByteArray) {
         require(sslEngine != null) { "SSL Engine not initialized - prepare() was not called" }
-        rxBuffer!!.clear()
+        val engine = sslEngine!!
+
+        info.anodsplace.headunit.utils.AppLog.e { "handshakeWrite: status=${engine.handshakeStatus}, dataSize=${handshakeData.size}" }
+
         val data = ByteBuffer.wrap(handshakeData)
-        val result = sslEngine!!.unwrap(data, rxBuffer)
-        runDelegatedTasks(result, sslEngine!!)
+        var totalConsumed = 0
+
+        // Unwrap ALL the data - phone may send multiple TLS records bundled together
+        while (data.hasRemaining()) {
+            rxBuffer!!.clear()
+
+            val result = try {
+                engine.unwrap(data, rxBuffer)
+            } catch (e: javax.net.ssl.SSLException) {
+                info.anodsplace.headunit.utils.AppLog.e { "handshakeWrite: SSLException at position ${data.position()}, remaining ${data.remaining()}: ${e.message}" }
+                // Stop processing on SSL error - remaining bytes might not be TLS data
+                break
+            }
+
+            runDelegatedTasks(result, engine)
+            totalConsumed += result.bytesConsumed()
+
+            info.anodsplace.headunit.utils.AppLog.e { "handshakeWrite: unwrap result=${result.status}, consumed=${result.bytesConsumed()}, hsStatus=${result.handshakeStatus}" }
+
+            // If we need to wrap (send data) or handshake is finished, stop unwrapping
+            if (result.handshakeStatus == javax.net.ssl.SSLEngineResult.HandshakeStatus.NEED_WRAP ||
+                result.handshakeStatus == javax.net.ssl.SSLEngineResult.HandshakeStatus.FINISHED ||
+                result.handshakeStatus == javax.net.ssl.SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
+                break
+            }
+
+            // If unwrap didn't consume anything, avoid infinite loop
+            if (result.bytesConsumed() == 0) {
+                info.anodsplace.headunit.utils.AppLog.e { "handshakeWrite: no bytes consumed, breaking" }
+                break
+            }
+        }
+
+        info.anodsplace.headunit.utils.AppLog.e { "handshakeWrite: total consumed=$totalConsumed, remaining=${data.remaining()}, finalStatus=${engine.handshakeStatus}" }
     }
 
     override fun decrypt(start: Int, length: Int, buffer: ByteArray): ByteArray {

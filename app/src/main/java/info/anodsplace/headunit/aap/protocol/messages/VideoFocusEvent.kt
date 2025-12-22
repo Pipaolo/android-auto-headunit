@@ -12,7 +12,7 @@ class VideoFocusEvent(gain: Boolean, unsolicited: Boolean)
     companion object {
         private fun makeProto(gain: Boolean, unsolicited: Boolean): MessageLite {
             return Media.VideoFocusNotification.newBuilder().apply {
-                mode = if (gain) Media.VideoFocusMode.FOCUSED else Media.VideoFocusMode.UNFOCUSED
+                mode = if (gain) Media.VideoFocusMode.VIDEO_FOCUS_PROJECTED else Media.VideoFocusMode.VIDEO_FOCUS_NATIVE
                 setUnsolicited(unsolicited)
             }.build()
         }

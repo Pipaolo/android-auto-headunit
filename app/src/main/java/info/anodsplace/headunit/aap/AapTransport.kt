@@ -42,6 +42,7 @@ class AapTransport(
     private var connection: AccessoryConnection? = null
     private var aapRead: AapRead? = null
     private var handler: Handler? = null
+    private val pendingMessages = mutableListOf<AapMessage>()
 
     val isAlive: Boolean
         get() = pollThread.isAlive
@@ -59,6 +60,8 @@ class AapTransport(
         }
     }
 
+    private var pollCount = 0
+
     override fun handleMessage(msg: Message): Boolean {
         return when (msg.what) {
             MSG_SEND -> {
@@ -67,17 +70,25 @@ class AapTransport(
                 true
             }
             MSG_POLL -> {
+                pollCount++
+                if (pollCount <= 5) {
+                    AppLog.e { "Poll #$pollCount starting, connection=${connection?.isConnected}" }
+                }
                 val ret = aapRead?.read() ?: -1
+                if (pollCount <= 5) {
+                    AppLog.e { "Poll #$pollCount returned: $ret" }
+                }
                 if (handler == null) {
                     return false
                 }
                 handler?.let {
                     if (!it.hasMessages(MSG_POLL)) {
-                        it.sendEmptyMessage(MSG_POLL) // TODO is this recursion?
+                        it.sendEmptyMessage(MSG_POLL)
                     }
                 }
 
                 if (ret < 0) {
+                    AppLog.e { "Poll returned error, quitting transport" }
                     this.quit()
                 }
                 true
@@ -105,6 +116,9 @@ class AapTransport(
         pollThread.quit()
         aapRead = null
         handler = null
+        synchronized(pendingMessages) {
+            pendingMessages.clear()
+        }
     }
 
     internal fun start(connection: AccessoryConnection): Boolean {
@@ -116,11 +130,14 @@ class AapTransport(
         }
 
         this.connection = connection
+        pollCount = 0
 
         aapRead = AapRead.Factory.create(connection, this, micRecorder, aapAudio, aapVideo, settings, context)
 
         pollThread.start()
         handler = Handler(pollThread.looper, this)
+        AppLog.e { "Starting poll thread, sending first MSG_POLL" }
+        flushPendingMessages()
         handler!!.sendEmptyMessage(MSG_POLL)
         // Create and start Transport Thread
         return true
@@ -129,12 +146,27 @@ class AapTransport(
     private fun handshake(connection: AccessoryConnection): Boolean {
         val buffer = ByteArray(Messages.DEF_BUFFER_LENGTH)
 
-        // Version request
+        // Give the phone time to initialize Android Auto after accessory mode switch
+        AppLog.i { "Waiting for phone to initialize..." }
+        Thread.sleep(500)
 
+        // Version request with retry
+        AppLog.i { "Sending version request..." }
         val versionRequest = Messages.createRawMessage(0, 3, 1, Messages.VERSION_REQUEST) // Version Request
-        var ret = connection.write(versionRequest, 0, versionRequest.size, CONNECT_TIMEOUT)
+
+        var ret = -1
+        for (attempt in 1..3) {
+            ret = connection.write(versionRequest, 0, versionRequest.size, CONNECT_TIMEOUT)
+            if (ret >= 0) {
+                AppLog.i { "Version request sent successfully on attempt $attempt" }
+                break
+            }
+            AppLog.e { "Version request attempt $attempt failed: ret=$ret" }
+            Thread.sleep(500) // Wait before retry
+        }
+
         if (ret < 0) {
-            AppLog.e { "Version request sendEncrypted ret: $ret" }
+            AppLog.e { "Version request sendEncrypted ret: $ret (all attempts failed)" }
             return false
         }
 
@@ -143,23 +175,28 @@ class AapTransport(
             AppLog.e { "Version request read ret: $ret" }
             return false
         }
-        AppLog.i { "Version response read ret: $ret" }
+        // Parse and store the negotiated version
+        if (!Messages.parseVersionResponse(buffer, ret)) {
+            AppLog.e { "Failed to parse version response" }
+            return false
+        }
+        AppLog.i { "Negotiated AA protocol version: ${Messages.getVersionString()}" }
 
         ssl.prepare()
         var handshakeCounter = 0
-        val maxHandshakeRounds = 4 // Increased for compatibility with newer Android versions
+        val maxHandshakeRounds = 10 // Increased for compatibility with newer Android versions
         while (handshakeCounter++ < maxHandshakeRounds) {
             val sentHandshakeData = ssl.handshakeRead()
 
             // Check if handshake is complete (no more data to send)
             if (sentHandshakeData.isEmpty()) {
-                AppLog.i { "SSL handshake complete after $handshakeCounter rounds" }
+                AppLog.e { "SSL handshake complete after $handshakeCounter rounds" }
                 break
             }
 
             val bio = Messages.createRawMessage(Channel.ID_CTR, 3, 3, sentHandshakeData)
             connection.write(bio, 0, bio.size)
-            AppLog.i { "SSL handshake round $handshakeCounter - TxData size: ${sentHandshakeData.size}"}
+            AppLog.e { "SSL handshake round $handshakeCounter - TxData size: ${sentHandshakeData.size}"}
 
             val size = connection.read(buffer, 0, buffer.size)
             if (size <= 0) {
@@ -167,10 +204,32 @@ class AapTransport(
                 return false
             }
 
+            // Log raw received data for debugging
+            val rawHex = buffer.take(minOf(size, 20)).joinToString(" ") { String.format("%02X", it) }
+            AppLog.e { "SSL handshake round $handshakeCounter - Raw data ($size bytes): $rawHex" }
+
+            // Check if this looks like a TLS record (should start with 0x16 for handshake or 0x14 for ChangeCipherSpec)
+            if (size > 6 && buffer[6] != 0x16.toByte() && buffer[6] != 0x14.toByte() && buffer[6] != 0x17.toByte()) {
+                AppLog.e { "WARNING: Received non-TLS data! First byte after header: ${String.format("%02X", buffer[6])}" }
+                // This might be an AAP error message, not TLS data
+            }
+
             val receivedHandshakeData = ByteArray(size - 6)
             System.arraycopy(buffer, 6, receivedHandshakeData, 0, size - 6)
-            AppLog.i { "SSL handshake round $handshakeCounter - RxData size: ${receivedHandshakeData.size}" }
+            AppLog.e { "SSL handshake round $handshakeCounter - RxData size: ${receivedHandshakeData.size}" }
             ssl.handshakeWrite(receivedHandshakeData)
+        }
+
+        // Check if we exited the loop without completing handshake
+        if (handshakeCounter >= maxHandshakeRounds) {
+            AppLog.e { "SSL handshake did NOT complete - exceeded max rounds" }
+            return false
+        }
+
+        // Verify handshake actually completed
+        if (ssl is AapSslImpl && !ssl.isHandshakeComplete()) {
+            AppLog.e { "SSL handshake did NOT complete properly - engine still in handshake state" }
+            return false
         }
 
         // Status = OK
@@ -183,6 +242,7 @@ class AapTransport(
         }
 
         AppLog.i { "Status OK sent: $ret" }
+        AppLog.e { "=== HANDSHAKE COMPLETE - Transport starting ===" }
 
         return true
     }
@@ -232,12 +292,33 @@ class AapTransport(
     }
 
     fun send(message: AapMessage) {
-        if (handler == null) {
-            AppLog.e { "Handler is null" }
+        val h = handler
+        if (h == null) {
+            // Queue message to be sent once handler is ready
+            synchronized(pendingMessages) {
+                pendingMessages.add(message)
+                if (pendingMessages.size == 1) {
+                    AppLog.d { "Queuing message until handler is ready" }
+                }
+            }
         } else {
             AppLog.d { message.toString() }
-            val msg = handler!!.obtainMessage(MSG_SEND, 0, message.size, message.data)
-            handler!!.sendMessage(msg)
+            val msg = h.obtainMessage(MSG_SEND, 0, message.size, message.data)
+            h.sendMessage(msg)
+        }
+    }
+
+    private fun flushPendingMessages() {
+        val h = handler ?: return
+        synchronized(pendingMessages) {
+            if (pendingMessages.isNotEmpty()) {
+                AppLog.i { "Flushing ${pendingMessages.size} pending messages" }
+                for (message in pendingMessages) {
+                    val msg = h.obtainMessage(MSG_SEND, 0, message.size, message.data)
+                    h.sendMessage(msg)
+                }
+                pendingMessages.clear()
+            }
         }
     }
 

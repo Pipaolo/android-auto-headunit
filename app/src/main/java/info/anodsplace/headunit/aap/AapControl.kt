@@ -21,28 +21,33 @@ internal class AapControlMedia (
     private val aapAudio: AapAudio): AapControl {
 
     override fun execute(message: AapMessage): Int {
+        AppLog.e { "AapControlMedia: type=${message.type}, channel=${message.channel}, size=${message.size}" }
 
-        when (message.type) {
-            Media.MediaMsgType.SETUPREQUEST_VALUE -> {
-                val setupRequest = message.parse(Media.MediaSetupRequest.newBuilder()).build()
-                return mediaSinkSetupRequest(setupRequest, message.channel)
+        try {
+            when (message.type) {
+                Media.MediaMsgType.SETUPREQUEST_VALUE -> {
+                    val setupRequest = message.parse(Media.MediaSetupRequest.newBuilder()).build()
+                    return mediaSinkSetupRequest(setupRequest, message.channel)
+                }
+                Media.MediaMsgType.STARTREQUEST_VALUE -> {
+                    val startRequest = message.parse(Media.Start.newBuilder()).build()
+                    return mediaStartRequest(startRequest, message.channel)
+                }
+                Media.MediaMsgType.STOPREQUEST_VALUE -> return mediaSinkStopRequest(message.channel)
+                Media.MediaMsgType.VIDEOFOCUSREQUESTNOTIFICATION_VALUE -> {
+                    // Video focus request - fields may vary by protocol version
+                    AppLog.i { "Video Focus Request received" }
+                    return 0
+                }
+                Media.MediaMsgType.MICREQUEST_VALUE -> {
+                    val micRequest = message.parse(Media.MicrophoneRequest.newBuilder()).build()
+                    return micRequest(micRequest)
+                }
+                Media.MediaMsgType.ACK_VALUE -> return 0
+                else -> AppLog.e { "Unsupported media message type: ${message.type}" }
             }
-            Media.MediaMsgType.STARTREQUEST_VALUE -> {
-                val startRequest = message.parse(Media.Start.newBuilder()).build()
-                return mediaStartRequest(startRequest, message.channel)
-            }
-            Media.MediaMsgType.STOPREQUEST_VALUE -> return mediaSinkStopRequest(message.channel)
-            Media.MediaMsgType.VIDEOFOCUSREQUESTNOTIFICATION_VALUE -> {
-                val focusRequest = message.parse(Media.VideoFocusRequestNotification.newBuilder()).build()
-                AppLog.i { "Video Focus Request - disp_id: ${focusRequest.dispChannelId}, mode: ${focusRequest.mode}, reason: ${focusRequest.reason}" }
-                return 0
-            }
-            Media.MediaMsgType.MICREQUEST_VALUE -> {
-                val micRequest = message.parse(Media.MicrophoneRequest.newBuilder()).build()
-                return micRequest(micRequest)
-            }
-            Media.MediaMsgType.ACK_VALUE -> return 0
-            else -> AppLog.e { "Unsupported" }
+        } catch (e: Exception) {
+            AppLog.e { "AapControlMedia error: ${e.message}" }
         }
         return 0
     }
@@ -326,6 +331,11 @@ internal class AapControlGateway(
             Channel.ID_INP -> return touchControl.execute(message)
             Channel.ID_SEN -> return sensorControl.execute(message)
             Channel.ID_VID, Channel.ID_AUD, Channel.ID_AU1, Channel.ID_AU2, Channel.ID_MIC -> return mediaControl.execute(message)
+            Channel.ID_MPB -> {
+                // Media playback status control messages (start/stop requests)
+                AppLog.d { "Media playback control message: type=${message.type}" }
+                return 0
+            }
         }
         return 0
     }

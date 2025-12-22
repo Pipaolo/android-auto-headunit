@@ -41,7 +41,7 @@ class Settings(context: Context) { // TODO more settings
 
     var resolution: Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType
         get() {
-            val number = prefs.getInt("resolution", Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._800x480_VALUE)
+            val number = prefs.getInt("resolution", Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType.VIDEO_800x480_VALUE)
             return Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType.forNumber(number)
         }
         set(value) { prefs.edit().putInt("resolution", value.number).apply() }
