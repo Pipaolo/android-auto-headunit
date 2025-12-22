@@ -35,8 +35,8 @@ class VideoDecoderController {
                 return
             }
 
-            // Create components
-            frameQueue = VideoFrameQueue(capacity = 6)
+            // Create components - capacity of 8 frames handles ~130ms at 60fps burst traffic
+            frameQueue = VideoFrameQueue(capacity = 8)
             decodeThread = VideoDecodeThread(
                 queue = frameQueue!!,
                 surface = holder.surface,

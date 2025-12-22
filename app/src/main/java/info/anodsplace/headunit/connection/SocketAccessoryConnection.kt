@@ -53,16 +53,20 @@ class SocketAccessoryConnection(private val mIp: String) : AccessoryConnection {
     }
 
     override fun disconnect() {
+        try {
+            mInputStream?.close()
+        } catch (e: IOException) {
+            AppLog.e(e)
+        }
+        mInputStream = null
+
         if (mSocket.isConnected) {
             try {
                 mSocket.close()
             } catch (e: IOException) {
                 AppLog.e(e)
-                //catch logic
             }
-
         }
-        mInputStream = null
     }
 
     companion object {

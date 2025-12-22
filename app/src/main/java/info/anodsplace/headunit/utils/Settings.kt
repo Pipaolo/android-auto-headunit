@@ -46,8 +46,21 @@ class Settings(context: Context) { // TODO more settings
         }
         set(value) { prefs.edit().putInt("resolution", value.number).apply() }
 
+    // The active resolution computed based on display dimensions (set at connection time)
+    var activeResolution: Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType
+        get() {
+            val number = prefs.getInt("active-resolution", Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType.VIDEO_1920x1080_VALUE)
+            return Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType.forNumber(number)
+        }
+        set(value) { prefs.edit().putInt("active-resolution", value.number).apply() }
+
+    // Manual DPI override (0 = auto-compute based on screen stretch)
+    var manualDpi: Int
+        get() = prefs.getInt("manual-dpi", 0)
+        set(value) { prefs.edit().putInt("manual-dpi", value).apply() }
+
     var micSampleRate: Int
-        get() = prefs.getInt("mic-sample-rate", 8000)
+        get() = prefs.getInt("mic-sample-rate", 16000)
         set(sampleRate) {
             prefs.edit().putInt("mic-sample-rate", sampleRate).apply()
         }

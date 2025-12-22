@@ -16,6 +16,7 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import info.anodsplace.headunit.App
 import info.anodsplace.headunit.R
+import info.anodsplace.headunit.aap.AapProjectionActivity
 import info.anodsplace.headunit.aap.AapService
 import info.anodsplace.headunit.connection.UsbAccessoryMode
 import info.anodsplace.headunit.connection.UsbReceiver
@@ -64,6 +65,13 @@ class HomeFragment : Fragment(), UsbReceiver.Listener {
 
     override fun onResume() {
         super.onResume()
+        
+        // Check if there's an active connection and redirect to projection activity
+        if (App.provide(requireContext()).transport.isAlive) {
+            startActivity(AapProjectionActivity.intent(requireContext()))
+            return
+        }
+        
         usbReceiver = UsbReceiver(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requireContext().registerReceiver(usbReceiver, UsbReceiver.createFilter(), Context.RECEIVER_EXPORTED)

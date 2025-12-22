@@ -118,5 +118,30 @@ class SettingsFragment : Fragment() {
                     }
                     .show()
         }
+
+        // DPI setting
+        val dpiEntries = resources.getStringArray(R.array.dpi_entries)
+        val dpiValues = resources.getIntArray(R.array.dpi_values)
+        updateDpiButtonText()
+        
+        binding.dpiButton.setOnClickListener {
+            val currentDpi = settings.manualDpi
+            val currentIndex = dpiValues.indexOf(currentDpi).coerceAtLeast(0)
+            
+            AlertDialog.Builder(activity)
+                    .setTitle(R.string.change_dpi)
+                    .setSingleChoiceItems(dpiEntries, currentIndex) { dialog, which ->
+                        settings.manualDpi = dpiValues[which]
+                        updateDpiButtonText()
+                        dialog.dismiss()
+                    }
+                    .show()
+        }
+    }
+    
+    private fun updateDpiButtonText() {
+        val dpi = settings.manualDpi
+        val displayText = if (dpi == 0) getString(R.string.dpi_auto) else dpi.toString()
+        binding.dpiButton.text = getString(R.string.dpi_setting, displayText)
     }
 }

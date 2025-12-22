@@ -29,9 +29,15 @@ class MicRecorder(private val micSampleRate: Int, private val context: Context) 
         AppLog.i { "threadMicAudio: $threadMicAudio  threadMicAudioActive: $threadMicAudioActive" }
         if (threadMicAudioActive) {
             threadMicAudioActive = false
-            if (threadMicAudio != null) {
-                threadMicAudio!!.interrupt()
+            threadMicAudio?.let { thread ->
+                thread.interrupt()
+                try {
+                    thread.join(500) // Wait up to 500ms for thread to finish
+                } catch (e: InterruptedException) {
+                    AppLog.e { "Interrupted while waiting for mic thread to stop" }
+                }
             }
+            threadMicAudio = null
         }
 
         if (audioRecord != null) {

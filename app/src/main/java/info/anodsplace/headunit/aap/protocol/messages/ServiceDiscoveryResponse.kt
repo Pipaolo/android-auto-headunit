@@ -12,16 +12,24 @@ import info.anodsplace.headunit.aap.protocol.proto.Sensors
 import info.anodsplace.headunit.utils.AppLog
 import info.anodsplace.headunit.utils.Settings
 
-/**
- * @author alex gavrishev
- *
- * @date 13/02/2017.
- */
-class ServiceDiscoveryResponse(settings: Settings, densityDpi: Int) : AapMessage(Channel.ID_CTR, Control.ControlMsgType.SERVICEDISCOVERYRESPONSE_VALUE, makeProto(settings, densityDpi)) {
+class ServiceDiscoveryResponse(settings: Settings, densityDpi: Int, displayWidth: Int, displayHeight: Int) : AapMessage(Channel.ID_CTR, Control.ControlMsgType.SERVICEDISCOVERYRESPONSE_VALUE, makeProto(settings, densityDpi, displayWidth, displayHeight)) {
 
     companion object {
-        private fun makeProto(settings: Settings, densityDpi: Int): MessageLite {
+        private fun makeProto(settings: Settings, densityDpi: Int, displayWidth: Int, displayHeight: Int): MessageLite {
             val services = mutableListOf<Control.Service>()
+
+            // Compute the appropriate resolution based on display dimensions
+            val resolution = Screen.forDisplaySize(displayWidth, displayHeight)
+            val screen = Screen.forResolution(resolution)
+            
+            // Use manual DPI if set, otherwise compute based on screen stretch
+            val computedDpi = Screen.computeDpi(screen, displayWidth, displayHeight)
+            val effectiveDpi = if (settings.manualDpi > 0) settings.manualDpi else computedDpi
+            
+            // Store the computed resolution for ProjectionView to use
+            settings.activeResolution = resolution
+            
+            AppLog.i { "Display: ${displayWidth}x${displayHeight}, resolution: ${screen.width}x${screen.height}, DPI: $effectiveDpi (manual: ${settings.manualDpi}, computed: $computedDpi, device: $densityDpi)" }
 
             val sensors = Control.Service.newBuilder().also { service ->
                 service.id = Channel.ID_SEN
@@ -43,9 +51,9 @@ class ServiceDiscoveryResponse(settings: Settings, densityDpi: Int) : AapMessage
                     it.addVideoConfigs(Control.Service.MediaSinkService.VideoConfiguration.newBuilder().apply {
                         marginHeight = 0
                         marginWidth = 0
-                        codecResolution = settings.resolution
-                        frameRate = Control.Service.MediaSinkService.VideoConfiguration.VideoFrameRateType.FPS_30 // TODO settings option
-                        density = densityDpi // TODO maybe this needs adjusting?
+                        codecResolution = resolution
+                        frameRate = Control.Service.MediaSinkService.VideoConfiguration.VideoFrameRateType.FPS_30
+                        density = effectiveDpi
                     }.build())
                 }.build()
             }.build()
@@ -56,8 +64,8 @@ class ServiceDiscoveryResponse(settings: Settings, densityDpi: Int) : AapMessage
                 service.id = Channel.ID_INP
                 service.inputSourceService = Control.Service.InputSourceService.newBuilder().also {
                     it.touchscreen = Control.Service.InputSourceService.TouchConfig.newBuilder().apply {
-                        width = Screen.forResolution(settings.resolution).width
-                        height = Screen.forResolution(settings.resolution).height
+                        width = screen.width
+                        height = screen.height
                     }.build()
                     it.addAllKeycodesSupported(KeyCode.supported)
                 }.build()
@@ -100,15 +108,16 @@ class ServiceDiscoveryResponse(settings: Settings, densityDpi: Int) : AapMessage
                 service.mediaSourceService = Control.Service.MediaSourceService.newBuilder().also {
                     it.type = Media.MediaCodecType.AUDIO
                     it.audioConfig = Media.AudioConfiguration.newBuilder().apply {
-                        sampleRate = 16000
+                        sampleRate = settings.micSampleRate
                         numberOfBits = 16
                         numberOfChannels = 1
                     }.build()
                 }.build()
             }.build()
             services.add(microphone)
+            AppLog.i { "Microphone configured: ${settings.micSampleRate}Hz, 16-bit, mono" }
 
-            if (settings.bluetoothAddress.isNotEmpty()) { // TODO find out what exactly this does
+            if (settings.bluetoothAddress.isNotEmpty()) {
                 val bluetooth = Control.Service.newBuilder().also { service ->
                     service.id = Channel.ID_BTH
                     service.bluetoothService = Control.Service.BluetoothService.newBuilder().also {
@@ -139,8 +148,8 @@ class ServiceDiscoveryResponse(settings: Settings, densityDpi: Int) : AapMessage
                 headUnitMake = "Android Auto HeadUnit"
                 headUnitSoftwareBuild = "1.0"
                 headUnitSoftwareVersion = "1.0"
-                driverPosition = true // true for RHS, false for LHS
-                canPlayNativeMediaDuringVr = false // TODO what does this do?
+                driverPosition = true
+                canPlayNativeMediaDuringVr = false
                 hideProjectedClock = false
                 addAllServices(services)
             }.build()

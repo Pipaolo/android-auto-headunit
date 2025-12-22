@@ -7,7 +7,7 @@ package info.anodsplace.headunit.decoder
  * during streaming. When queue is full, drops oldest frame to bound latency.
  * 
  * @param capacity Number of frame slots (default 6 for ~100ms at 60fps)
- * @param maxFrameSize Maximum bytes per frame (default 128KB to handle 1080p I-frames)
+ * @param maxFrameSize Maximum bytes per frame (default 512KB to handle high-resolution I-frames)
  */
 class VideoFrameQueue(
     private val capacity: Int = 6,
@@ -15,8 +15,8 @@ class VideoFrameQueue(
 ) {
     
     companion object {
-        // Maximum frame size - 128KB to handle large 1080p I-frames
-        const val MAX_FRAME_SIZE = 131072
+        // Maximum frame size - 512KB to handle large I-frames at high resolutions (1080p+)
+        const val MAX_FRAME_SIZE = 524288
     }
     // Pre-allocated frame slots - no runtime allocation
     private val frames = Array(capacity) { ByteArray(maxFrameSize) }

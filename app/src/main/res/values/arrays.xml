@@ -32,6 +32,41 @@
         <item>night</item>
     </string-array>
 
+    <!-- DPI options -->
+    <string-array name="dpi_entries">
+        <item>Auto</item>
+        <item>120 (Low - Larger UI)</item>
+        <item>160 (Medium)</item>
+        <item>200</item>
+        <item>240 (High)</item>
+        <item>280</item>
+        <item>320 (Extra High)</item>
+        <item>400</item>
+        <item>480 (XXHigh - Smaller UI)</item>
+    </string-array>
+    <string-array name="dpi_string_values">
+        <item>0</item>
+        <item>120</item>
+        <item>160</item>
+        <item>200</item>
+        <item>240</item>
+        <item>280</item>
+        <item>320</item>
+        <item>400</item>
+        <item>480</item>
+    </string-array>
+    <integer-array name="dpi_values">
+        <item>0</item>
+        <item>120</item>
+        <item>160</item>
+        <item>200</item>
+        <item>240</item>
+        <item>280</item>
+        <item>320</item>
+        <item>400</item>
+        <item>480</item>
+    </integer-array>
+
     <!-- Sample rate options -->
     <string-array name="sample_rate_entries">
         <item>8 kHz</item>

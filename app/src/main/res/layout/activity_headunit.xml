@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<info.anodsplace.headunit.view.ProjectionView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/surface"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent" />
+    android:layout_height="match_parent"
+    android:background="#000000">
 
+    <info.anodsplace.headunit.view.ProjectionView
+        android:id="@+id/surface"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center" />
+
+</FrameLayout>

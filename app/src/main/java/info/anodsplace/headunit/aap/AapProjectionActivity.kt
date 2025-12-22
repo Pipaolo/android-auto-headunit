@@ -20,7 +20,10 @@ import info.anodsplace.headunit.utils.IntentFilters
 import info.anodsplace.headunit.contract.KeyIntent
 
 class AapProjectionActivity : SurfaceActivity(), SurfaceHolder.Callback {
-    private lateinit var screen: Screen
+    // Pre-allocated list for touch pointer data - avoids GC on every touch event
+    // Max 10 pointers is more than enough for any multi-touch scenario
+    private val pointerDataPool = ArrayList<Triple<Int, Int, Int>>(10)
+
     private val disconnectReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             finish()
@@ -36,7 +39,6 @@ class AapProjectionActivity : SurfaceActivity(), SurfaceHolder.Callback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        screen = Screen.forResolution(App.provide(this).settings.resolution)
 
         surface.setSurfaceCallback(this)
         surface.setOnTouchListener { _, event ->
@@ -82,16 +84,25 @@ class AapProjectionActivity : SurfaceActivity(), SurfaceHolder.Callback {
         val action = TouchEvent.motionEventToAction(actionMasked) ?: return
         val ts = SystemClock.elapsedRealtime()
 
-        val pointerData = mutableListOf<Triple<Int, Int, Int>>()
+        // Get the screen resolution (what the phone expects)
+        val screen = surface.screen()
+
+        // Calculate scale factors from rendered view to phone's expected resolution
+        // surface.width/height are the actual rendered dimensions (aspect-ratio corrected)
+        val scaleX = screen.width.toFloat() / surface.width
+        val scaleY = screen.height.toFloat() / surface.height
+
+        // Reuse pre-allocated list to avoid GC pressure on Android 4.3
+        pointerDataPool.clear()
         repeat(event.pointerCount) { pointerIndex ->
             val pointerId = event.getPointerId(pointerIndex)
-            val x = event.getX(pointerIndex) / (surface.width / screen.width.toFloat())
-            val y = event.getY(pointerIndex) / (surface.height / screen.height.toFloat())
+            val x = (event.getX(pointerIndex) * scaleX).toInt()
+            val y = (event.getY(pointerIndex) * scaleY).toInt()
             if (x < 0 || x >= 65535 || y < 0 || y >= 65535) return
-            pointerData.add(Triple(pointerId, x.toInt(), y.toInt()))
+            pointerDataPool.add(Triple(pointerId, x, y))
         }
 
-        transport.send(TouchEvent(ts, action, event.actionIndex, pointerData))
+        transport.send(TouchEvent(ts, action, event.actionIndex, pointerDataPool))
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {

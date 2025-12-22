@@ -47,4 +47,11 @@
         android:text=""
         android:background="@drawable/button_selectable_background" />
 
+    <Button
+        android:id="@+id/dpiButton"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:text=""
+        android:background="@drawable/button_selectable_background" />
+
 </LinearLayout>

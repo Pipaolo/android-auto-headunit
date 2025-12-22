@@ -31,29 +31,33 @@ class AudioTrackWrapper(stream: Int, sampleRateInHz: Int, bitDepth: Int, channel
         }
         val toRelease = audioTrack
         // AudioTrack.release can take some time, so we call it on a background thread.
-        object : Thread() {
-            override fun run() {
+        Thread({
+            try {
                 toRelease.flush()
                 toRelease.release()
+            } catch (e: Exception) {
+                // Ignore exceptions during cleanup
             }
-        }.start()
+        }, "AudioTrack-Release").start()
     }
 
     private object AudioBuffer {
         /**
          * A minimum length for the [android.media.AudioTrack] buffer, in microseconds.
+         * 50ms provides low latency for real-time A/V sync.
          */
-        private const val MIN_BUFFER_DURATION_US: Long = 250 * 1000
+        private const val MIN_BUFFER_DURATION_US: Long = 50 * 1000
 
         /**
          * A multiplication factor to apply to the minimum buffer size requested by the underlying
-         * [android.media.AudioTrack].
+         * [android.media.AudioTrack]. Lower value = lower latency.
          */
-        private const val BUFFER_MULTIPLICATION_FACTOR = 4
+        private const val BUFFER_MULTIPLICATION_FACTOR = 2
         /**
          * A maximum length for the [android.media.AudioTrack] buffer, in microseconds.
+         * 100ms caps latency while preventing underruns on slower devices.
          */
-        private const val MAX_BUFFER_DURATION_US: Long = 1 * 1000
+        private const val MAX_BUFFER_DURATION_US: Long = 100 * 1000
 
         /**
          * The number of microseconds in one second.

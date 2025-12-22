@@ -60,6 +60,7 @@ class AapService : Service(), UsbReceiver.Listener, AccessoryConnection.Listener
     override fun onDestroy() {
         super.onDestroy()
         onDisconnect()
+        stopService(GpsLocationService.intent(this))
         unregisterReceiver(nightModeReceiver)
         unregisterReceiver(usbReceiver)
         uiModeManager.disableCarMode(0)

@@ -21,7 +21,7 @@ internal class AapControlMedia (
     private val aapAudio: AapAudio): AapControl {
 
     override fun execute(message: AapMessage): Int {
-        AppLog.e { "AapControlMedia: type=${message.type}, channel=${message.channel}, size=${message.size}" }
+        AppLog.d { "AapControlMedia: type=${message.type}, channel=${message.channel}, size=${message.size}" }
 
         try {
             when (message.type) {
@@ -90,12 +90,25 @@ internal class AapControlMedia (
     }
 
     private fun micRequest(micRequest: Media.MicrophoneRequest): Int {
-        AppLog.d { "Mic request: $micRequest" }
+        AppLog.d { "Mic request: open=${micRequest.open}, maxUnacked=${micRequest.maxUnacked}" }
 
         if (micRequest.open) {
+            // Generate a session ID for the microphone
+            val sessionId = (System.currentTimeMillis() and 0xFFFF).toInt()
+            aapTransport.setSessionId(Channel.ID_MIC, sessionId)
+            
+            // Send MicrophoneResponse to acknowledge the request
+            val response = Media.MicrophoneResponse.newBuilder()
+                .setStatus(0) // STATUS_OK
+                .setSessionId(sessionId)
+                .build()
+            aapTransport.send(AapMessage(Channel.ID_MIC, Media.MediaMsgType.MICRESPONSE_VALUE, response))
+            AppLog.i { "Mic opened, session ID: $sessionId" }
+            
             micRecorder.start()
         } else {
             micRecorder.stop()
+            AppLog.i { "Mic closed" }
         }
         return 0
     }
@@ -201,7 +214,13 @@ internal class AapControlService(
     private fun serviceDiscoveryRequest(request: Control.ServiceDiscoveryRequest): Int { // Service Discovery Request
         AppLog.i { "Service Discovery Request: ${request.phoneName}" } // S 0 CTR b src: HU  lft:   113  msg_type:     6 Service Discovery Response    S 0 CTR b 00000000 0a 08 08 01 12 04 0a 02 08 0b 0a 13 08 02 1a 0f
 
-        val msg = ServiceDiscoveryResponse(settings, context.resources.displayMetrics.densityDpi)
+        val displayMetrics = context.resources.displayMetrics
+        val msg = ServiceDiscoveryResponse(
+            settings, 
+            displayMetrics.densityDpi,
+            displayMetrics.widthPixels,
+            displayMetrics.heightPixels
+        )
 
         aapTransport.send(msg)
         return 0

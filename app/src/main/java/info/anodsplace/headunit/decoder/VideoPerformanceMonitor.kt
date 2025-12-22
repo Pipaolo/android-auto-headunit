@@ -38,11 +38,11 @@ class VideoPerformanceMonitor(
         val queueDepth = queue.size()
 
         // Only log if there are issues worth noting
-        if (newDrops > 0 || queueDepth > 3) {
+        if (newDrops > 0 || queueDepth > 4) {
             AppLog.w {
                 "Video stats: decoded=$framesDecoded, " +
                 "dropped=$newDrops (total=$dropped), " +
-                "queue=$queueDepth/6"
+                "queue=$queueDepth/8"
             }
         }
 

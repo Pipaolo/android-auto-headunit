@@ -7,12 +7,15 @@ import java.nio.ByteBuffer
 internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
     
     companion object {
-        // Maximum frame size - matches protocol transport buffer size (128KB)
-        const val MAX_FRAME_SIZE = 131072
+        // Maximum frame size - 512KB to handle large I-frames at high resolutions (1080p+)
+        const val MAX_FRAME_SIZE = 524288
     }
     
     // Pre-allocated buffer for fragment reassembly - uses direct buffer to avoid extra copy
     private val fragmentBuffer = ByteBuffer.allocateDirect(MAX_FRAME_SIZE)
+
+    // Pre-allocated array for copying from direct buffer to queue - avoids per-frame allocation
+    private val fragmentArray = ByteArray(MAX_FRAME_SIZE)
 
     fun process(message: AapMessage): Boolean {
         val queue = frameQueue() ?: run {
@@ -69,12 +72,12 @@ internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
                 }
                 fragmentBuffer.put(buf, 0, len)
                 fragmentBuffer.flip()
-                
-                // For direct buffers, we need to copy to array for offer()
-                val array = ByteArray(fragmentBuffer.limit())
-                fragmentBuffer.get(array)
-                queue.offer(array, 0, array.size)
-                
+
+                // Use pre-allocated array to avoid per-frame allocation (important for Android 4.3 GC)
+                val frameSize = fragmentBuffer.limit()
+                fragmentBuffer.get(fragmentArray, 0, frameSize)
+                queue.offer(fragmentArray, 0, frameSize)
+
                 fragmentBuffer.clear()
                 return true
             }

@@ -24,6 +24,9 @@
     <string name="disabled">Disabled</string>
     <string name="resolution">Resolution: %s</string>
     <string name="change_resolution">Change resolution</string>
+    <string name="dpi_setting">DPI: %s</string>
+    <string name="change_dpi">Change DPI</string>
+    <string name="dpi_auto">Auto</string>
 
     <!-- Onboarding -->
     <string name="next">NEXT</string>
