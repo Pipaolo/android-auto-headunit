@@ -5,8 +5,14 @@ import info.anodsplace.headunit.utils.AppLog
 import java.nio.ByteBuffer
 
 internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
+    
+    companion object {
+        // Maximum frame size - matches protocol transport buffer size (128KB)
+        const val MAX_FRAME_SIZE = 131072
+    }
+    
     // Pre-allocated buffer for fragment reassembly - uses direct buffer to avoid extra copy
-    private val fragmentBuffer = ByteBuffer.allocateDirect(65536)
+    private val fragmentBuffer = ByteBuffer.allocateDirect(MAX_FRAME_SIZE)
 
     fun process(message: AapMessage): Boolean {
         val queue = frameQueue() ?: run {
@@ -33,17 +39,34 @@ internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
                 // First fragment - start reassembly
                 if (isValidNalUnit(buf, 10)) {
                     fragmentBuffer.clear()
-                    fragmentBuffer.put(buf, 10, len - 10)
-                    return true
+                    val dataLen = len - 10
+                    if (dataLen <= MAX_FRAME_SIZE) {
+                        fragmentBuffer.put(buf, 10, dataLen)
+                        return true
+                    } else {
+                        AppLog.e { "First fragment exceeds max frame size ($dataLen > $MAX_FRAME_SIZE)" }
+                        return true
+                    }
                 }
             }
             8 -> {
                 // Middle fragment - continue reassembly
-                fragmentBuffer.put(buf, 0, len)
-                return true
+                if (fragmentBuffer.remaining() >= len) {
+                    fragmentBuffer.put(buf, 0, len)
+                    return true
+                } else {
+                    AppLog.e { "Fragment buffer overflow, dropping frame (remaining=${fragmentBuffer.remaining()}, needed=$len)" }
+                    fragmentBuffer.clear()
+                    return true
+                }
             }
             10 -> {
                 // Last fragment - complete and queue
+                if (fragmentBuffer.remaining() < len) {
+                    AppLog.e { "Fragment buffer overflow on last fragment, dropping frame" }
+                    fragmentBuffer.clear()
+                    return true
+                }
                 fragmentBuffer.put(buf, 0, len)
                 fragmentBuffer.flip()
                 

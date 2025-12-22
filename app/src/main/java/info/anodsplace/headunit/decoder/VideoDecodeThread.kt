@@ -36,7 +36,7 @@ class VideoDecodeThread(
     private var codecConfigured = false
 
     // Reusable buffer - no allocation during decode
-    private val frameBuffer = ByteArray(65536)
+    private val frameBuffer = ByteArray(VideoFrameQueue.MAX_FRAME_SIZE)
     
     private lateinit var monitor: VideoPerformanceMonitor
 

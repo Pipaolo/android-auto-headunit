@@ -6,6 +6,7 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 
 import info.anodsplace.headunit.App
+import info.anodsplace.headunit.aap.protocol.Screen
 import info.anodsplace.headunit.decoder.VideoDecoderController
 import info.anodsplace.headunit.utils.AppLog
 
@@ -15,6 +16,11 @@ class ProjectionView : SurfaceView, SurfaceHolder.Callback {
 
     init {
         holder.addCallback(this)
+        
+        // Set fixed size for surface - required on older Android versions to prevent
+        // "can't dequeue multiple buffers without setting the buffer count" error
+        val screen = Screen.forResolution(App.provide(context).settings.resolution)
+        holder.setFixedSize(screen.width, screen.height)
     }
 
     constructor(context: Context) : super(context)
@@ -34,12 +40,18 @@ class ProjectionView : SurfaceView, SurfaceHolder.Callback {
 
     override fun surfaceCreated(holder: SurfaceHolder) {
         AppLog.i { "holder $holder" }
+        
+        // Start decoder here with fixed dimensions (like original app)
+        // This ensures surface is fully created before MediaCodec starts
+        val screen = Screen.forResolution(App.provide(context).settings.resolution)
+        videoController.onSurfaceAvailable(holder, screen.width, screen.height)
+        
         surfaceCallback?.surfaceCreated(holder)
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         AppLog.i { "holder $holder, format: $format, width: $width, height: $height" }
-        videoController.onSurfaceAvailable(holder, width, height)
+        // Note: Decoder is started in surfaceCreated with fixed dimensions
         surfaceCallback?.surfaceChanged(holder, format, width, height)
     }
 

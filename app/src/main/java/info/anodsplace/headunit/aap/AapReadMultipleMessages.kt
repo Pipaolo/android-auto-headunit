@@ -18,13 +18,40 @@ internal class AapReadMultipleMessages(
     private val recv_buffer = ByteArray(Messages.DEF_BUFFER_LENGTH)
     private val recv_header = AapMessageIncoming.EncryptedHeader()
     private val msg_buffer = ByteArray(65535) // unsigned short max
+    
+    // Resilience: track consecutive read errors to handle transient USB glitches
+    private var consecutiveErrors = 0
+    
+    companion object {
+        private const val MAX_CONSECUTIVE_ERRORS = 3
+    }
 
     override fun doRead(connection: AccessoryConnection): Int {
+        // Check if connection is still valid
+        if (!connection.isConnected) {
+            AppLog.e { "Connection lost, stopping transport" }
+            return -1
+        }
+        
         val size = connection.read(recv_buffer, 0, recv_buffer.size)
         if (size < 0) {
-            AppLog.e { "USB read error in doRead: $size" }
-            return -1  // Propagate error to stop transport
+            consecutiveErrors++
+            AppLog.e { "USB read error in doRead: $size (consecutive: $consecutiveErrors/$MAX_CONSECUTIVE_ERRORS)" }
+            
+            // Give up after too many consecutive errors
+            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                AppLog.e { "Max consecutive errors reached, stopping transport" }
+                return -1
+            }
+            
+            // Brief delay before retry
+            Thread.sleep(50)
+            return 0  // Keep polling, don't stop yet
         }
+        
+        // Reset error counter on successful read
+        consecutiveErrors = 0
+        
         if (size == 0) {
             return 0  // Timeout, keep polling
         }
