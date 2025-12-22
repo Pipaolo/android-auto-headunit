@@ -82,9 +82,62 @@ class HomeFragment : Fragment(), UsbReceiver.Listener {
     }
 
     private fun onUsbConnectClicked() {
-        // TODO: Trigger USB connection via existing AapService
-        // For now, just update status text
+        // Check if already connected
+        if (App.provide(requireContext()).transport.isAlive) {
+            Toast.makeText(requireContext(), "Already connected", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val deviceList = usbManager.deviceList
+        if (deviceList.isEmpty()) {
+            Toast.makeText(requireContext(), R.string.usb_no_devices_found, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        showDeviceSelectionDialog(deviceList.values.toList())
+    }
+
+    private fun showDeviceSelectionDialog(devices: List<UsbDevice>) {
+        val deviceNames = devices.map { "${it.uniqueName}\n${it.statusText}" }.toTypedArray()
+
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.usb_select_device_title)
+            .setItems(deviceNames) { _, which ->
+                val selectedDevice = devices[which]
+                onDeviceSelected(selectedDevice)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun onDeviceSelected(device: UsbDevice) {
         updateUsbStatus(getString(R.string.usb_status_connecting))
+
+        if (usbManager.hasPermission(device)) {
+            connectToDevice(device)
+        } else {
+            pendingDevice = device
+            requestUsbPermission(device)
+        }
+    }
+
+    private fun requestUsbPermission(device: UsbDevice) {
+        updateUsbStatus(getString(R.string.usb_status_requesting_permission))
+
+        val intent = Intent(UsbReceiver.ACTION_USB_DEVICE_PERMISSION).apply {
+            putExtra(UsbManager.EXTRA_DEVICE, device)
+            putExtra(UsbReceiver.EXTRA_CONNECT, true)
+            setPackage(requireContext().packageName)
+        }
+
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+
+        val pendingIntent = PendingIntent.getBroadcast(requireContext(), 0, intent, flags)
+        usbManager.requestPermission(device, pendingIntent)
     }
 
     fun updateUsbStatus(status: String) {
