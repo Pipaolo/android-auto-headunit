@@ -24,18 +24,18 @@ class Settings(context: Context) { // TODO more settings
 
     var lastKnownLocation: Location
         get() {
-            val latitude = prefs.getLong("last-loc-latitude", (32.0864169).toLong())
-            val longitude = prefs.getLong("last-loc-longitude", (34.7557871).toLong())
+            val latitude = prefs.getFloat("last-loc-latitude", 32.0864169f).toDouble()
+            val longitude = prefs.getFloat("last-loc-longitude", 34.7557871f).toDouble()
 
             val location = Location("")
-            location.latitude = latitude.toDouble()
-            location.longitude = longitude.toDouble()
+            location.latitude = latitude
+            location.longitude = longitude
             return location
         }
         set(location) {
             prefs.edit()
-                .putLong("last-loc-latitude", location.latitude.toLong())
-                .putLong("last-loc-longitude", location.longitude.toLong())
+                .putFloat("last-loc-latitude", location.latitude.toFloat())
+                .putFloat("last-loc-longitude", location.longitude.toFloat())
                 .apply()
         }
 

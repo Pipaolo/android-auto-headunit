@@ -10,6 +10,7 @@
         <item name="android:textColorSecondary">@color/textSecondary</item>
         <item name="android:statusBarColor">@color/background</item>
         <item name="android:navigationBarColor">@color/background</item>
+        <item name="preferenceTheme">@style/PreferenceTheme</item>
     </style>
 
     <!-- Translucent theme for overlay activities -->
@@ -32,6 +33,13 @@
         <item name="android:gravity">center</item>
     </style>
 
+    <!-- Tile status text (small secondary text below tile label) -->
+    <style name="TileStatusStyle">
+        <item name="android:textColor">@color/textSecondary</item>
+        <item name="android:textSize">@dimen/text_caption</item>
+        <item name="android:gravity">center</item>
+    </style>
+
     <!-- Primary button (teal) -->
     <style name="PrimaryButtonStyle">
         <item name="android:background">@drawable/button_primary</item>
@@ -46,13 +54,10 @@
 
     <!-- Settings header -->
     <style name="SettingsHeaderStyle">
-        <item name="android:background">@color/primary</item>
-        <item name="android:textColor">@color/onPrimary</item>
+        <item name="android:textColor">@color/textPrimary</item>
         <item name="android:textSize">@dimen/text_title</item>
         <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:gravity">center_vertical</item>
-        <item name="android:paddingLeft">@dimen/spacing_medium</item>
-        <item name="android:minHeight">@dimen/settings_header_height</item>
     </style>
 
     <!-- Onboarding title -->

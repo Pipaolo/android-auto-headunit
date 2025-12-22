@@ -1,20 +1,15 @@
 package info.anodsplace.headunit.main
 
-import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
-import android.widget.TextView
-import androidx.activity.viewModels
-import androidx.core.app.ActivityCompat
 import androidx.fragment.app.FragmentActivity
-import info.anodsplace.headunit.App
 import info.anodsplace.headunit.R
-import info.anodsplace.headunit.aap.AapProjectionActivity
+import info.anodsplace.headunit.ui.home.HomeFragment
+import info.anodsplace.headunit.ui.onboarding.OnboardingActivity
 import info.anodsplace.headunit.utils.AppLog
-import info.anodsplace.headunit.utils.NetworkUtils
 import info.anodsplace.headunit.utils.hideSystemUI
-import java.io.IOException
 
 class MainActivity : FragmentActivity() {
     var keyListener: KeyListener? = null
@@ -27,15 +22,28 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        supportFragmentManager
-                .beginTransaction()
-                .replace(R.id.main_content, SettingsFragment())
-                .commit()
+        // Check if onboarding has been completed
+        if (!isOnboardingComplete()) {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+            finish()
+            return
+        }
 
-        ActivityCompat.requestPermissions(this, arrayOf(
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.ACCESS_FINE_LOCATION
-        ), permissionRequestCode)
+        // Load HomeFragment
+        if (savedInstanceState == null) {
+            loadHomeFragment()
+        }
+    }
+
+    private fun isOnboardingComplete(): Boolean {
+        val prefs = getSharedPreferences(OnboardingActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(OnboardingActivity.KEY_ONBOARDING_COMPLETE, false)
+    }
+
+    private fun loadHomeFragment() {
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.main_content, HomeFragment.newInstance())
+            .commit()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -53,9 +61,5 @@ class MainActivity : FragmentActivity() {
         AppLog.i { "onKeyUp: $keyCode" }
 
         return keyListener?.onKeyEvent(event) ?: super.onKeyUp(keyCode, event)
-    }
-
-    companion object {
-        private const val permissionRequestCode = 97
     }
 }

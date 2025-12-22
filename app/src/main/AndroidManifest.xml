@@ -75,6 +75,21 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.onboarding.OnboardingActivity"
+            android:theme="@style/AppTheme"
+            android:screenOrientation="unspecified" />
+
+        <activity
+            android:name=".ui.settings.SettingsActivity"
+            android:theme="@style/AppTheme"
+            android:screenOrientation="unspecified"
+            android:parentActivityName=".main.MainActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".main.MainActivity" />
+        </activity>
+
         <service android:name=".aap.AapService" />
         <service android:name=".location.GpsLocationService" />
 

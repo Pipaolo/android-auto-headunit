@@ -8,4 +8,39 @@
         <item>None</item>
     </string-array>
 
+    <!-- Resolution options -->
+    <string-array name="resolution_entries">
+        <item>720p</item>
+        <item>1080p</item>
+        <item>1440p</item>
+    </string-array>
+    <string-array name="resolution_values">
+        <item>720</item>
+        <item>1080</item>
+        <item>1440</item>
+    </string-array>
+
+    <!-- Day/Night mode options -->
+    <string-array name="day_night_entries">
+        <item>Automatic</item>
+        <item>Always Day</item>
+        <item>Always Night</item>
+    </string-array>
+    <string-array name="day_night_values">
+        <item>auto</item>
+        <item>day</item>
+        <item>night</item>
+    </string-array>
+
+    <!-- Sample rate options -->
+    <string-array name="sample_rate_entries">
+        <item>8 kHz</item>
+        <item>16 kHz</item>
+        <item>44.1 kHz</item>
+    </string-array>
+    <string-array name="sample_rate_values">
+        <item>8000</item>
+        <item>16000</item>
+        <item>44100</item>
+    </string-array>
 </resources>

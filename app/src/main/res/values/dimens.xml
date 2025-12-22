@@ -29,6 +29,8 @@
 
     <!-- Settings -->
     <dimen name="settings_header_height">56dp</dimen>
+    <dimen name="settings_header_padding">16dp</dimen>
+    <dimen name="settings_header_icon_size">24dp</dimen>
     <dimen name="settings_item_padding">16dp</dimen>
 
     <!-- General spacing -->
