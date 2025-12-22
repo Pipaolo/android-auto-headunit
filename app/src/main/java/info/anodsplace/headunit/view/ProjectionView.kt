@@ -6,11 +6,11 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 
 import info.anodsplace.headunit.App
-import info.anodsplace.headunit.decoder.VideoDecoder
+import info.anodsplace.headunit.decoder.VideoDecoderController
 import info.anodsplace.headunit.utils.AppLog
 
 class ProjectionView : SurfaceView, SurfaceHolder.Callback {
-    private var videoDecoder = App.provide(context).videoDecoder
+    private var videoController = App.provide(context).videoDecoderController
     private var surfaceCallback: SurfaceHolder.Callback? = null
 
     init {
@@ -29,7 +29,7 @@ class ProjectionView : SurfaceView, SurfaceHolder.Callback {
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        videoDecoder.stop("onDetachedFromWindow")
+        videoController.stop("onDetachedFromWindow")
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
@@ -39,13 +39,13 @@ class ProjectionView : SurfaceView, SurfaceHolder.Callback {
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         AppLog.i { "holder $holder, format: $format, width: $width, height: $height" }
-        videoDecoder.onSurfaceHolderAvailable(holder, width, height)
+        videoController.onSurfaceAvailable(holder, width, height)
         surfaceCallback?.surfaceChanged(holder, format, width, height)
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         AppLog.i { "holder $holder" }
-        videoDecoder.stop("surfaceDestroyed")
+        videoController.stop("surfaceDestroyed")
         surfaceCallback?.surfaceDestroyed(holder)
     }
 }

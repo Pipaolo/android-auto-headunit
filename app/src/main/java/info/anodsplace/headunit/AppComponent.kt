@@ -7,7 +7,7 @@ import android.media.AudioManager
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import info.anodsplace.headunit.aap.AapTransport
 import info.anodsplace.headunit.decoder.AudioDecoder
-import info.anodsplace.headunit.decoder.VideoDecoder
+import info.anodsplace.headunit.decoder.VideoDecoderController
 import info.anodsplace.headunit.utils.Settings
 
 class AppComponent(private val app: App) {
@@ -16,13 +16,19 @@ class AppComponent(private val app: App) {
     val transport: AapTransport
         get() {
             if (_transport == null) {
-               _transport = AapTransport(audioDecoder, videoDecoder, audioManager, settings, app)
+               _transport = AapTransport(
+                   audioDecoder,
+                   { videoDecoderController.getFrameQueue() },
+                   audioManager,
+                   settings,
+                   app
+               )
             }
             return _transport!!
         }
 
     val settings = Settings(app)
-    val videoDecoder = VideoDecoder()
+    val videoDecoderController = VideoDecoderController()
     val audioDecoder = AudioDecoder()
 
     fun resetTransport() {

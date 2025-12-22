@@ -16,13 +16,13 @@ import info.anodsplace.headunit.connection.AccessoryConnection.Companion.CONNECT
 import info.anodsplace.headunit.contract.ProjectionActivityRequest
 import info.anodsplace.headunit.decoder.AudioDecoder
 import info.anodsplace.headunit.decoder.MicRecorder
-import info.anodsplace.headunit.decoder.VideoDecoder
+import info.anodsplace.headunit.decoder.VideoFrameQueue
 import info.anodsplace.headunit.utils.*
 import java.util.*
 
 class AapTransport(
         audioDecoder: AudioDecoder,
-        videoDecoder: VideoDecoder,
+        frameQueueProvider: () -> VideoFrameQueue?,
         audioManager: AudioManager,
         private val settings: Settings,
         private val context: Context)
@@ -49,7 +49,7 @@ class AapTransport(
     init {
         micRecorder.listener = this
         aapAudio = AapAudio(audioDecoder, audioManager)
-        aapVideo = AapVideo(videoDecoder)
+        aapVideo = AapVideo(frameQueueProvider)
     }
 
     internal fun startSensor(type: Int) {
