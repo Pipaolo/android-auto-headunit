@@ -17,26 +17,52 @@ import info.anodsplace.headunit.utils.AppLog
  * @link https://github.com/google/ExoPlayer/blob/release-v2/library/src/main/java/com/google/android/exoplayer2/audio/AudioTrack.java
  */
 internal class AapAudio(
-        private val audioDecoder: AudioDecoder) {
+        private val audioDecoder: AudioDecoder,
+        private val audioManager: AudioManager) {
+
+    // Flag to track if we've acquired initial audio focus
+    // We only request focus once to prevent audio ducking on subsequent requests
+    private var hasAcquiredFocus = false
 
     fun requestFocusChange(stream: Int, focusRequest: Int, callback: AudioManager.OnAudioFocusChangeListener) {
-        // Immediately grant focus without actually requesting from Android AudioManager.
-        // This prevents Android from ducking/lowering other audio when the phone requests focus
-        // (e.g., for touch feedback sounds or navigation prompts during screen interaction).
         when (focusRequest) {
             Control.AudioFocusRequestNotification.AudioFocusRequestType.RELEASE_VALUE -> {
+                // Always handle release
+                audioManager.abandonAudioFocus(callback)
                 callback.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS)
             }
-            Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_VALUE -> {
-                callback.onAudioFocusChange(AudioManager.AUDIOFOCUS_GAIN)
-            }
-            Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_VALUE -> {
-                callback.onAudioFocusChange(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-            }
+            Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_VALUE,
+            Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_VALUE,
             Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_MAY_DUCK_VALUE -> {
-                callback.onAudioFocusChange(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                if (!hasAcquiredFocus) {
+                    // First focus request - actually request from Android
+                    AppLog.i { "Requesting initial audio focus" }
+                    audioManager.requestAudioFocus(callback, stream, AudioManager.AUDIOFOCUS_GAIN)
+                    hasAcquiredFocus = true
+                } else {
+                    // Subsequent requests - just grant immediately without involving Android
+                    // This prevents audio ducking during screen interactions
+                    AppLog.d { "Bypassing audio focus request (already have focus)" }
+                }
+                // Always notify the callback that focus is granted
+                val focusChange = when (focusRequest) {
+                    Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_VALUE -> 
+                        AudioManager.AUDIOFOCUS_GAIN
+                    Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_VALUE -> 
+                        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
+                    else -> 
+                        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+                }
+                callback.onAudioFocusChange(focusChange)
             }
         }
+    }
+    
+    /**
+     * Reset audio focus state. Call this when disconnecting.
+     */
+    fun reset() {
+        hasAcquiredFocus = false
     }
 
     fun process(message: AapMessage): Int {
