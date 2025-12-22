@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <EditTextPreference
+        android:key="bluetooth_address"
+        android:title="Bluetooth Address"
+        android:summary="MAC address for Bluetooth connection" />
+
+    <SwitchPreferenceCompat
+        android:key="debug_mode"
+        android:title="Debug Mode"
+        android:summary="Enable verbose logging"
+        android:defaultValue="false" />
+
+    <Preference
+        android:key="about"
+        android:title="About"
+        android:summary="App version and information" />
+
+</PreferenceScreen>

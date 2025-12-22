@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="@dimen/tile_spacing">
+
+    <!-- USB Connect Tile -->
+    <LinearLayout
+        android:id="@+id/tile_usb"
+        style="@style/TileStyle"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginBottom="@dimen/tile_spacing"
+        android:orientation="vertical">
+
+        <ImageView
+            android:id="@+id/tile_usb_icon"
+            android:layout_width="@dimen/tile_icon_size"
+            android:layout_height="@dimen/tile_icon_size"
+            android:src="@drawable/ic_usb"
+            android:contentDescription="@string/usb_connect" />
+
+        <TextView
+            android:id="@+id/tile_usb_label"
+            style="@style/TileLabelStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/usb_connect" />
+
+        <TextView
+            android:id="@+id/tile_usb_status"
+            style="@style/TileStatusStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/usb_status_ready" />
+    </LinearLayout>
+
+    <!-- Settings Tile -->
+    <LinearLayout
+        android:id="@+id/tile_settings"
+        style="@style/TileStyle"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginBottom="@dimen/tile_spacing"
+        android:orientation="vertical">
+
+        <ImageView
+            android:layout_width="@dimen/tile_icon_size"
+            android:layout_height="@dimen/tile_icon_size"
+            android:src="@drawable/ic_settings"
+            android:contentDescription="@string/settings" />
+
+        <TextView
+            style="@style/TileLabelStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings" />
+    </LinearLayout>
+
+    <!-- Exit Tile -->
+    <LinearLayout
+        android:id="@+id/tile_exit"
+        style="@style/TileStyle"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <ImageView
+            android:layout_width="@dimen/tile_icon_size"
+            android:layout_height="@dimen/tile_icon_size"
+            android:src="@drawable/ic_exit"
+            android:contentDescription="@string/exit" />
+
+        <TextView
+            style="@style/TileLabelStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/exit" />
+    </LinearLayout>
+
+</LinearLayout>

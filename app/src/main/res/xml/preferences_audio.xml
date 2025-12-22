@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <ListPreference
+        android:key="mic_sample_rate"
+        android:title="Microphone Sample Rate"
+        android:summary="Audio quality for voice input"
+        android:entries="@array/sample_rate_entries"
+        android:entryValues="@array/sample_rate_values"
+        android:defaultValue="16000" />
+
+    <SwitchPreferenceCompat
+        android:key="audio_focus"
+        android:title="Audio Focus"
+        android:summary="Request audio focus when connected"
+        android:defaultValue="true" />
+
+</PreferenceScreen>

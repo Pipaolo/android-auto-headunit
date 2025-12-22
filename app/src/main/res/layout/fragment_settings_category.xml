@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="@dimen/tile_spacing">
+
+    <!-- Row 1: Graphics, Audio -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/tile_graphics"
+            style="@style/TileStyle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="@dimen/tile_spacing"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="@dimen/tile_icon_size"
+                android:layout_height="@dimen/tile_icon_size"
+                android:src="@drawable/ic_graphics"
+                android:contentDescription="@string/settings_graphics" />
+
+            <TextView
+                style="@style/TileLabelStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_graphics" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/tile_audio"
+            style="@style/TileStyle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="@dimen/tile_icon_size"
+                android:layout_height="@dimen/tile_icon_size"
+                android:src="@drawable/ic_audio"
+                android:contentDescription="@string/settings_audio" />
+
+            <TextView
+                style="@style/TileLabelStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_audio" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Row 2: GPS, Input -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="@dimen/tile_spacing"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/tile_gps"
+            style="@style/TileStyle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="@dimen/tile_spacing"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="@dimen/tile_icon_size"
+                android:layout_height="@dimen/tile_icon_size"
+                android:src="@drawable/ic_gps"
+                android:contentDescription="@string/settings_gps" />
+
+            <TextView
+                style="@style/TileLabelStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_gps" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/tile_input"
+            style="@style/TileStyle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="@dimen/tile_icon_size"
+                android:layout_height="@dimen/tile_icon_size"
+                android:src="@drawable/ic_input"
+                android:contentDescription="@string/settings_input" />
+
+            <TextView
+                style="@style/TileLabelStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_input" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Row 3: Other, Back -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="@dimen/tile_spacing"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/tile_other"
+            style="@style/TileStyle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="@dimen/tile_spacing"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="@dimen/tile_icon_size"
+                android:layout_height="@dimen/tile_icon_size"
+                android:src="@drawable/ic_other"
+                android:contentDescription="@string/settings_other" />
+
+            <TextView
+                style="@style/TileLabelStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_other" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/tile_back"
+            style="@style/TileStyle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="@dimen/tile_icon_size"
+                android:layout_height="@dimen/tile_icon_size"
+                android:src="@drawable/ic_back"
+                android:contentDescription="@string/back" />
+
+            <TextView
+                style="@style/TileLabelStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/back" />
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>

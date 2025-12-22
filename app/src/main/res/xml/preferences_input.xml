@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <Preference
+        android:key="keymap"
+        android:title="Keymap Configuration"
+        android:summary="Configure button mappings" />
+
+    <SeekBarPreference
+        android:key="touch_sensitivity"
+        android:title="Touch Sensitivity"
+        android:summary="Adjust touch response"
+        android:min="1"
+        android:max="10"
+        android:defaultValue="5" />
+
+</PreferenceScreen>
