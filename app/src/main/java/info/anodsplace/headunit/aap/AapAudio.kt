@@ -36,24 +36,25 @@ internal class AapAudio(
             Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_MAY_DUCK_VALUE -> {
                 if (!hasAcquiredFocus) {
                     // First focus request - actually request from Android
+                    // Let AudioManager call the callback when focus is granted
                     AppLog.i { "Requesting initial audio focus" }
                     audioManager.requestAudioFocus(callback, stream, AudioManager.AUDIOFOCUS_GAIN)
                     hasAcquiredFocus = true
+                    // Don't call callback here - AudioManager will do it
                 } else {
-                    // Subsequent requests - just grant immediately without involving Android
+                    // Subsequent requests - grant immediately without involving Android
                     // This prevents audio ducking during screen interactions
                     AppLog.d { "Bypassing audio focus request (already have focus)" }
+                    val focusChange = when (focusRequest) {
+                        Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_VALUE ->
+                            AudioManager.AUDIOFOCUS_GAIN
+                        Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_VALUE ->
+                            AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
+                        else ->
+                            AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+                    }
+                    callback.onAudioFocusChange(focusChange)
                 }
-                // Always notify the callback that focus is granted
-                val focusChange = when (focusRequest) {
-                    Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_VALUE -> 
-                        AudioManager.AUDIOFOCUS_GAIN
-                    Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_VALUE -> 
-                        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
-                    else -> 
-                        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
-                }
-                callback.onAudioFocusChange(focusChange)
             }
         }
     }
