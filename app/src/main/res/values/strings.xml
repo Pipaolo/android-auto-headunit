@@ -53,6 +53,11 @@
     <string name="usb_already_connected">Already connected</string>
     <string name="usb_accessory_mode_failed">Failed to switch to accessory mode</string>
 
+    <!-- Driver Position -->
+    <string name="driver_position_title">Driver Position</string>
+    <string name="driver_position_summary_right">Right-hand drive (driver on right side)</string>
+    <string name="driver_position_summary_left">Left-hand drive (driver on left side)</string>
+
     <!-- Settings Categories -->
     <string name="settings_graphics">Graphics</string>
     <string name="settings_audio">Audio</string>

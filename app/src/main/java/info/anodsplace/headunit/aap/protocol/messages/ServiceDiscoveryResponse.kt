@@ -174,7 +174,7 @@ class ServiceDiscoveryResponse(settings: Settings, @Suppress("UNUSED_PARAMETER")
                 headUnitMake = "Android Auto HeadUnit"
                 headUnitSoftwareBuild = "1.0"
                 headUnitSoftwareVersion = "1.0"
-                driverPosition = true
+                driverPosition = settings.driverPosition
                 canPlayNativeMediaDuringVr = false
                 hideProjectedClock = false
                 addAllServices(services)

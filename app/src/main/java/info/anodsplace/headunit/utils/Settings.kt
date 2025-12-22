@@ -126,6 +126,11 @@ class Settings(context: Context) { // TODO more settings
         get() = prefs.getInt("margin-right", 0)
         set(value) { prefs.edit().putInt("margin-right", value).apply() }
 
+    // Driver position: true = right-hand drive (driver on right), false = left-hand drive (driver on left)
+    var driverPosition: Boolean
+        get() = prefs.getBoolean("driver-position", true)
+        set(value) { prefs.edit().putBoolean("driver-position", value).apply() }
+
     @SuppressLint("ApplySharedPref")
     fun commit() {
         prefs.edit().commit()

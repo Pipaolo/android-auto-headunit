@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <SwitchPreferenceCompat
+        android:key="driver_position"
+        android:title="@string/driver_position_title"
+        android:summaryOn="@string/driver_position_summary_right"
+        android:summaryOff="@string/driver_position_summary_left"
+        android:defaultValue="true" />
+
     <EditTextPreference
         android:key="bluetooth_address"
         android:title="Bluetooth Address"
