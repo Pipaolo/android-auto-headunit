@@ -111,7 +111,7 @@ class AapService : Service(), UsbReceiver.Listener, AccessoryConnection.Listener
     }
 
     private fun onDisconnect() {
-        sendBroadcast(DisconnectIntent())
+        App.provide(this).localBroadcastManager.sendBroadcast(DisconnectIntent())
         reset()
         accessoryConnection?.disconnect()
         accessoryConnection = null

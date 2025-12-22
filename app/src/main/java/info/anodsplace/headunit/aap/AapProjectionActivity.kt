@@ -45,18 +45,13 @@ class AapProjectionActivity : SurfaceActivity(), SurfaceHolder.Callback {
             true
         }
 
-        // Register disconnect receiver for entire activity lifetime
-        // Must be active even when paused to handle USB disconnect
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(disconnectReceiver, IntentFilters.disconnect, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(disconnectReceiver, IntentFilters.disconnect)
-        }
+        // Register disconnect receiver with LocalBroadcastManager for reliable intra-app communication
+        App.provide(this).localBroadcastManager.registerReceiver(disconnectReceiver, IntentFilters.disconnect)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(disconnectReceiver)
+        App.provide(this).localBroadcastManager.unregisterReceiver(disconnectReceiver)
     }
 
     override fun onPause() {

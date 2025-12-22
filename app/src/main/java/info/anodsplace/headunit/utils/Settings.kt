@@ -128,7 +128,7 @@ class Settings(context: Context) { // TODO more settings
 
     // Driver position: true = right-hand drive (driver on right), false = left-hand drive (driver on left)
     var driverPosition: Boolean
-        get() = prefs.getBoolean("driver-position", true)
+        get() = prefs.getBoolean("driver-position", false)
         set(value) { prefs.edit().putBoolean("driver-position", value).apply() }
 
     @SuppressLint("ApplySharedPref")

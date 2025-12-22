@@ -126,8 +126,8 @@ class AapTransport(
         synchronized(pendingMessages) {
             pendingMessages.clear()
         }
-        // Notify that we're disconnecting - this will close the projection activity
-        context.sendBroadcast(DisconnectIntent())
+        // Notify that we're disconnecting - use LocalBroadcastManager for reliability
+        App.provide(context).localBroadcastManager.sendBroadcast(DisconnectIntent())
         // Stop decoders
         App.provide(context).audioDecoder.stop()
         App.provide(context).videoDecoderController.stop("AapTransport::quit")
