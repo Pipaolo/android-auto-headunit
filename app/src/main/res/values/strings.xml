@@ -24,5 +24,28 @@
     <string name="disabled">Disabled</string>
     <string name="resolution">Resolution: %s</string>
     <string name="change_resolution">Change resolution</string>
-</resources>
 
+    <!-- Onboarding -->
+    <string name="next">NEXT</string>
+    <string name="finish">FINISH</string>
+    <string name="onboarding_location_title">Location Access Required</string>
+    <string name="onboarding_location_desc">Location data is needed for navigation. No data is stored or shared.</string>
+    <string name="onboarding_mic_title">Microphone Access Required</string>
+    <string name="onboarding_mic_desc">Microphone is used for Google Assistant. No audio is stored by this app.</string>
+    <string name="onboarding_phone_title">Phone Access Required</string>
+    <string name="onboarding_phone_desc">Needed to detect calls and switch screens automatically in self mode.</string>
+
+    <!-- Home -->
+    <string name="usb_connect">USB</string>
+    <string name="usb_status_ready">Ready</string>
+    <string name="usb_status_connecting">Connecting…</string>
+    <string name="usb_status_connected">Connected</string>
+
+    <!-- Settings Categories -->
+    <string name="settings_graphics">Graphics</string>
+    <string name="settings_audio">Audio</string>
+    <string name="settings_gps">GPS</string>
+    <string name="settings_input">Input</string>
+    <string name="settings_other">Other</string>
+    <string name="back">Back</string>
+</resources>
