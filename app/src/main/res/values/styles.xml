@@ -1,14 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="AppTheme" parent="android:Theme.Holo.NoActionBar.Fullscreen">
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:windowFullscreen">true</item>
-        <item name="android:windowContentOverlay">@null</item>
-        <item name="android:windowBackground">@drawable/bg</item>
-        <item name="android:textColor">@color/text_primary</item>
-        <item name="android:textColorPrimary">@color/text_primary</item>
-        <item name="android:textColorSecondary">@color/text_second</item>
+    <!-- Base application theme -->
+    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primaryDark</item>
+        <item name="colorAccent">@color/primary</item>
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:textColorPrimary">@color/textPrimary</item>
+        <item name="android:textColorSecondary">@color/textSecondary</item>
+        <item name="android:statusBarColor">@color/background</item>
+        <item name="android:navigationBarColor">@color/background</item>
     </style>
 
+    <!-- Translucent theme for overlay activities -->
     <style name="AppTheme.Translucent" parent="android:Theme.Translucent.NoTitleBar.Fullscreen" />
+
+    <!-- Tile style -->
+    <style name="TileStyle">
+        <item name="android:background">@drawable/tile_background</item>
+        <item name="android:padding">@dimen/tile_padding</item>
+        <item name="android:gravity">center</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
+    <!-- Tile label text -->
+    <style name="TileLabelStyle">
+        <item name="android:textColor">@color/textPrimary</item>
+        <item name="android:textSize">@dimen/text_tile_label</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:gravity">center</item>
+    </style>
+
+    <!-- Primary button (teal) -->
+    <style name="PrimaryButtonStyle">
+        <item name="android:background">@drawable/button_primary</item>
+        <item name="android:textColor">@color/onPrimary</item>
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:paddingLeft">@dimen/spacing_large</item>
+        <item name="android:paddingRight">@dimen/spacing_large</item>
+        <item name="android:minHeight">@dimen/onboarding_button_height</item>
+    </style>
+
+    <!-- Settings header -->
+    <style name="SettingsHeaderStyle">
+        <item name="android:background">@color/primary</item>
+        <item name="android:textColor">@color/onPrimary</item>
+        <item name="android:textSize">@dimen/text_title</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingLeft">@dimen/spacing_medium</item>
+        <item name="android:minHeight">@dimen/settings_header_height</item>
+    </style>
+
+    <!-- Onboarding title -->
+    <style name="OnboardingTitleStyle">
+        <item name="android:textColor">@color/textPrimary</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:gravity">center</item>
+    </style>
+
+    <!-- Onboarding description -->
+    <style name="OnboardingDescriptionStyle">
+        <item name="android:textColor">@color/textSecondary</item>
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:gravity">center</item>
+        <item name="android:lineSpacingMultiplier">1.3</item>
+    </style>
+
+    <!-- Settings preference theme -->
+    <style name="PreferenceTheme" parent="PreferenceThemeOverlay">
+        <item name="android:textColorPrimary">@color/textPrimary</item>
+        <item name="android:textColorSecondary">@color/textSecondary</item>
+    </style>
 </resources>
