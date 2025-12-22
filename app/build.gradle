@@ -61,6 +61,9 @@ protobuf {
 dependencies {
     implementation 'com.google.protobuf:protobuf-javalite:3.25.1'
 
+    // Conscrypt for modern TLS support on older Android
+    implementation 'org.conscrypt:conscrypt-android:2.5.2'
+
     // Using older versions that support minSdk 18
     implementation 'androidx.activity:activity-ktx:1.7.2'
     implementation 'androidx.fragment:fragment-ktx:1.5.7'

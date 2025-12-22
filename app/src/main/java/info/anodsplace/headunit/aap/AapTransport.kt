@@ -147,22 +147,29 @@ class AapTransport(
 
         ssl.prepare()
         var handshakeCounter = 0
-        while (handshakeCounter++ < 2) {
+        val maxHandshakeRounds = 4 // Increased for compatibility with newer Android versions
+        while (handshakeCounter++ < maxHandshakeRounds) {
             val sentHandshakeData = ssl.handshakeRead()
+
+            // Check if handshake is complete (no more data to send)
+            if (sentHandshakeData.isEmpty()) {
+                AppLog.i { "SSL handshake complete after $handshakeCounter rounds" }
+                break
+            }
 
             val bio = Messages.createRawMessage(Channel.ID_CTR, 3, 3, sentHandshakeData)
             connection.write(bio, 0, bio.size)
-            AppLog.i { "TxData was: ${bytesToHex(sentHandshakeData)}"}
+            AppLog.i { "SSL handshake round $handshakeCounter - TxData size: ${sentHandshakeData.size}"}
 
             val size = connection.read(buffer, 0, buffer.size)
             if (size <= 0) {
-                AppLog.e { "SSL receive error: $size" }
+                AppLog.e { "SSL handshake round $handshakeCounter - receive error: $size" }
                 return false
             }
 
             val receivedHandshakeData = ByteArray(size - 6)
             System.arraycopy(buffer, 6, receivedHandshakeData, 0, size - 6)
-            AppLog.i { "RxData was: ${bytesToHex(receivedHandshakeData)}" }
+            AppLog.i { "SSL handshake round $handshakeCounter - RxData size: ${receivedHandshakeData.size}" }
             ssl.handshakeWrite(receivedHandshakeData)
         }
 

@@ -7,18 +7,45 @@ import javax.net.ssl.SSLEngine
 import javax.net.ssl.SSLEngineResult
 
 object AapSslImpl: AapSsl {
-    private val sslContext: SSLContext = SSLContext.getInstance("TLSv1.2")
+    private val sslContext: SSLContext by lazy { createSslContext() }
     private var sslEngine: SSLEngine? = null
     private var txBuffer: ByteBuffer? = null
     private var rxBuffer: ByteBuffer? = null
 
-    init {
-        sslContext.init(arrayOf(SingleKeyKeyManager), arrayOf(NoCheckTrustManager), null)
+    private fun createSslContext(): SSLContext {
+        // With Conscrypt installed, TLSv1.2 should be available on all Android versions
+        val context = SSLContext.getInstance("TLSv1.2")
+        context.init(arrayOf(SingleKeyKeyManager), arrayOf(NoCheckTrustManager), null)
+        return context
     }
 
     override fun prepare() {
         val newSslEngine = sslContext.createSSLEngine()
         newSslEngine.useClientMode = true
+
+        // Enable TLSv1.2 (required by modern Android Auto)
+        newSslEngine.enabledProtocols = arrayOf("TLSv1.2")
+
+        // Enable cipher suites compatible with Android Auto
+        val supportedCiphers = newSslEngine.supportedCipherSuites.toSet()
+        val preferredCiphers = arrayOf(
+            // GCM ciphers (required by modern Android)
+            "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+            "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+            "TLS_RSA_WITH_AES_128_GCM_SHA256",
+            "TLS_RSA_WITH_AES_256_GCM_SHA384",
+            // CBC fallbacks
+            "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
+            "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384",
+            "TLS_RSA_WITH_AES_128_CBC_SHA256",
+            "TLS_RSA_WITH_AES_256_CBC_SHA256",
+            "TLS_RSA_WITH_AES_128_CBC_SHA",
+            "TLS_RSA_WITH_AES_256_CBC_SHA"
+        )
+        val enabledCiphers = preferredCiphers.filter { it in supportedCiphers }.toTypedArray()
+        if (enabledCiphers.isNotEmpty()) {
+            newSslEngine.enabledCipherSuites = enabledCiphers
+        }
 
         val session = newSslEngine.session
         val appBufferMax = session.applicationBufferSize
