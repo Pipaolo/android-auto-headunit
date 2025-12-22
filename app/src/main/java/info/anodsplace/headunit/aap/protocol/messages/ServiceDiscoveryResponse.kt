@@ -20,8 +20,8 @@ class ServiceDiscoveryResponse(settings: Settings, @Suppress("UNUSED_PARAMETER")
         private fun makeProto(settings: Settings, displayWidth: Int, displayHeight: Int): MessageLite {
             val services = mutableListOf<Control.Service>()
 
-            // Compute the appropriate resolution based on display dimensions
-            val resolution = Screen.forDisplaySize(displayWidth, displayHeight)
+            // Use the user's selected resolution from settings
+            val resolution = settings.resolution
             val screen = Screen.forResolution(resolution)
             
             // Calculate letterbox margins and adjusted DPI if aspect ratio preservation is enabled

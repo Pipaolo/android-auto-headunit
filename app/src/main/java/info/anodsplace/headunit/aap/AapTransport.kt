@@ -121,7 +121,6 @@ class AapTransport(
         aapRead = null
         handler = null
         aapVideo.reset()
-        aapAudio.reset()
         synchronized(pendingMessages) {
             pendingMessages.clear()
         }
