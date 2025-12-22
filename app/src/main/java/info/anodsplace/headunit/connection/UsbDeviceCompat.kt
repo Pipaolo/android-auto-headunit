@@ -53,3 +53,6 @@ val UsbDevice.uniqueName: String
         val productId = this.productId.toShort()
         return "${VENDOR_NAMES[vendorId] ?: "$vendorId"} ${vendorId.toHexString()}:${productId.toHexString()}"
     }
+
+val UsbDevice.statusText: String
+    get() = if (isInAccessoryMode) "Accessory mode" else "Ready"
