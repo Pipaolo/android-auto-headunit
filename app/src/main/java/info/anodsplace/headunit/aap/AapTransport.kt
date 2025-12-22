@@ -14,6 +14,7 @@ import info.anodsplace.headunit.aap.protocol.proto.Input
 import info.anodsplace.headunit.aap.protocol.proto.Sensors
 import info.anodsplace.headunit.connection.AccessoryConnection
 import info.anodsplace.headunit.connection.AccessoryConnection.Companion.CONNECT_TIMEOUT
+import info.anodsplace.headunit.contract.DisconnectIntent
 import info.anodsplace.headunit.contract.ProjectionActivityRequest
 import info.anodsplace.headunit.decoder.AudioDecoder
 import info.anodsplace.headunit.decoder.MicRecorder
@@ -116,6 +117,7 @@ class AapTransport(
     }
 
     internal fun quit() {
+        AppLog.i { "Transport quit - cleaning up" }
         micRecorder.listener = null
         pollThread.quit()
         aapRead = null
@@ -124,6 +126,11 @@ class AapTransport(
         synchronized(pendingMessages) {
             pendingMessages.clear()
         }
+        // Notify that we're disconnecting - this will close the projection activity
+        context.sendBroadcast(DisconnectIntent())
+        // Stop decoders
+        App.provide(context).audioDecoder.stop()
+        App.provide(context).videoDecoderController.stop("AapTransport::quit")
     }
 
     internal fun start(connection: AccessoryConnection): Boolean {
