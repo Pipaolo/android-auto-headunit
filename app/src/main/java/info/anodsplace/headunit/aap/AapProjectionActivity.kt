@@ -17,7 +17,6 @@ import info.anodsplace.headunit.app.SurfaceActivity
 import info.anodsplace.headunit.utils.AppLog
 import info.anodsplace.headunit.utils.IntentFilters
 import info.anodsplace.headunit.contract.KeyIntent
-import kotlinx.android.synthetic.main.activity_headunit.*
 
 class AapProjectionActivity : SurfaceActivity(), SurfaceHolder.Callback {
     private lateinit var screen: Screen
@@ -29,7 +28,7 @@ class AapProjectionActivity : SurfaceActivity(), SurfaceHolder.Callback {
 
     private val keyCodeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            val event = intent.getParcelableExtra<KeyEvent>(KeyIntent.extraEvent)
+            val event = intent.getParcelableExtra<KeyEvent>(KeyIntent.extraEvent) ?: return
             onKeyEvent(event.keyCode, event.action == KeyEvent.ACTION_DOWN)
         }
     }

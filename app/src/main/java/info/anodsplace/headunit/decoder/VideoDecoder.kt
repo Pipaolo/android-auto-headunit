@@ -17,6 +17,7 @@ class VideoDecoder {
     private var mHolder: SurfaceHolder? = null
     private var mCodecConfigured: Boolean = false
 
+
     fun decode(buffer: ByteArray, offset: Int, size: Int) {
         synchronized(sLock) {
             if (mCodec == null) {

@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="info.anodsplace.headunit">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-sdk />
 
@@ -50,6 +49,7 @@
         <activity
             android:name=".app.UsbAttachedActivity"
             android:launchMode="singleTop"
+            android:exported="true"
             android:theme="@style/AppTheme.Translucent">
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
@@ -63,6 +63,7 @@
             android:name=".main.MainActivity"
             android:configChanges="orientation|keyboardHidden|screenSize"
             android:launchMode="singleTask"
+            android:exported="true"
             android:screenOrientation="sensorLandscape"
             android:theme="@style/AppTheme">
 
@@ -77,13 +78,15 @@
         <service android:name=".aap.AapService" />
         <service android:name=".location.GpsLocationService" />
 
-        <receiver android:name=".app.RemoteControlReceiver">
+        <receiver android:name=".app.RemoteControlReceiver"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
 
-        <receiver android:name=".app.BootCompleteReceiver" >
+        <receiver android:name=".app.BootCompleteReceiver"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>

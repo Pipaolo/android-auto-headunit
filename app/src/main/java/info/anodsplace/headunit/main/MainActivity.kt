@@ -14,7 +14,6 @@ import info.anodsplace.headunit.aap.AapProjectionActivity
 import info.anodsplace.headunit.utils.AppLog
 import info.anodsplace.headunit.utils.NetworkUtils
 import info.anodsplace.headunit.utils.hideSystemUI
-import kotlinx.android.synthetic.main.activity_main.*
 import java.io.IOException
 
 class MainActivity : FragmentActivity() {

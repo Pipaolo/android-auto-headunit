@@ -53,6 +53,7 @@ class LocationUpdateIntent(location: Location): Intent(action) {
 
         fun extractLocation(intent: Intent): Location {
             return intent.getParcelableExtra(LocationManager.KEY_LOCATION_CHANGED)
+                ?: Location(LocationManager.GPS_PROVIDER)
         }
     }
 }

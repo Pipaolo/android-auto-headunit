@@ -95,7 +95,7 @@ class KeymapFragment : Fragment(), MainActivity.KeyListener, View.OnClickListene
 
     private val keyCodeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            val event = intent.getParcelableExtra<KeyEvent>(KeyIntent.extraEvent)
+            val event = intent.getParcelableExtra<KeyEvent>(KeyIntent.extraEvent) ?: return
             onKeyEvent(event)
         }
     }
