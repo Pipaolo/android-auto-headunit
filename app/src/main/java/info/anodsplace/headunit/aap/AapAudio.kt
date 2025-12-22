@@ -24,37 +24,40 @@ internal class AapAudio(
     // We only request focus once to prevent audio ducking on subsequent requests
     private var hasAcquiredFocus = false
 
+    // No-op listener that ignores Android's focus change notifications
+    // This prevents Android from ducking our audio when other sounds play
+    private val ignoreListener = AudioManager.OnAudioFocusChangeListener {
+        // Intentionally ignore all focus changes from Android
+        // We manage focus responses to the phone ourselves
+    }
+
     fun requestFocusChange(stream: Int, focusRequest: Int, callback: AudioManager.OnAudioFocusChangeListener) {
         when (focusRequest) {
             Control.AudioFocusRequestNotification.AudioFocusRequestType.RELEASE_VALUE -> {
-                // Always handle release
-                audioManager.abandonAudioFocus(callback)
+                // Handle release - abandon our no-op listener
+                audioManager.abandonAudioFocus(ignoreListener)
                 callback.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS)
             }
             Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_VALUE,
             Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_VALUE,
             Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_MAY_DUCK_VALUE -> {
                 if (!hasAcquiredFocus) {
-                    // First focus request - actually request from Android
-                    // Let AudioManager call the callback when focus is granted
+                    // First focus request - request from Android with our no-op listener
+                    // This acquires focus but ignores Android's ducking requests
                     AppLog.i { "Requesting initial audio focus" }
-                    audioManager.requestAudioFocus(callback, stream, AudioManager.AUDIOFOCUS_GAIN)
+                    audioManager.requestAudioFocus(ignoreListener, stream, AudioManager.AUDIOFOCUS_GAIN)
                     hasAcquiredFocus = true
-                    // Don't call callback here - AudioManager will do it
-                } else {
-                    // Subsequent requests - grant immediately without involving Android
-                    // This prevents audio ducking during screen interactions
-                    AppLog.d { "Bypassing audio focus request (already have focus)" }
-                    val focusChange = when (focusRequest) {
-                        Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_VALUE ->
-                            AudioManager.AUDIOFOCUS_GAIN
-                        Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_VALUE ->
-                            AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
-                        else ->
-                            AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
-                    }
-                    callback.onAudioFocusChange(focusChange)
                 }
+                // Always notify the phone immediately that focus is granted
+                val focusChange = when (focusRequest) {
+                    Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_VALUE ->
+                        AudioManager.AUDIOFOCUS_GAIN
+                    Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_VALUE ->
+                        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
+                    else ->
+                        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+                }
+                callback.onAudioFocusChange(focusChange)
             }
         }
     }
