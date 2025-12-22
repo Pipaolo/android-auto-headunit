@@ -169,7 +169,34 @@ class HomeFragment : Fragment(), UsbReceiver.Listener {
     }
 
     private fun connectToDevice(device: UsbDevice) {
-        // Will be implemented in next task
+        pendingDevice = null
+
+        if (device.isInAccessoryMode) {
+            // Already in accessory mode, start service directly
+            startAapService(device)
+        } else {
+            // Need to switch to accessory mode first
+            updateUsbStatus(getString(R.string.usb_status_connecting))
+            val usbMode = UsbAccessoryMode(usbManager)
+
+            if (usbMode.connectAndSwitch(device)) {
+                // Device will re-enumerate in accessory mode
+                // UsbAttachedActivity will handle it, or we wait for re-attach
+                updateUsbStatus(getString(R.string.usb_status_ready))
+            } else {
+                Toast.makeText(requireContext(), "Failed to switch to accessory mode", Toast.LENGTH_SHORT).show()
+                updateUsbStatus(getString(R.string.usb_status_ready))
+            }
+        }
+    }
+
+    private fun startAapService(device: UsbDevice) {
+        val serviceIntent = AapService.createIntent(device, requireContext())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            requireContext().startForegroundService(serviceIntent)
+        } else {
+            requireContext().startService(serviceIntent)
+        }
     }
 
     companion object {
