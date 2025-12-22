@@ -7,6 +7,7 @@ import android.app.UiModeManager
 import android.content.*
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import android.widget.Toast
@@ -47,8 +48,13 @@ class AapService : Service(), UsbReceiver.Listener, AccessoryConnection.Listener
         val nightModeFilter = IntentFilter()
         nightModeFilter.addAction(Intent.ACTION_TIME_TICK)
         nightModeFilter.addAction(LocationUpdateIntent.action)
-        registerReceiver(nightModeReceiver, nightModeFilter)
-        registerReceiver(usbReceiver, UsbReceiver.createFilter())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(nightModeReceiver, nightModeFilter, Context.RECEIVER_NOT_EXPORTED)
+            registerReceiver(usbReceiver, UsbReceiver.createFilter(), Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(nightModeReceiver, nightModeFilter)
+            registerReceiver(usbReceiver, UsbReceiver.createFilter())
+        }
     }
 
     override fun onDestroy() {

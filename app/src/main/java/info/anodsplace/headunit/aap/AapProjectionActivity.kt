@@ -3,6 +3,7 @@ package info.anodsplace.headunit.aap
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.KeyEvent
@@ -52,8 +53,13 @@ class AapProjectionActivity : SurfaceActivity(), SurfaceHolder.Callback {
 
     override fun onResume() {
         super.onResume()
-        registerReceiver(disconnectReceiver, IntentFilters.disconnect)
-        registerReceiver(keyCodeReceiver, IntentFilters.keyEvent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(disconnectReceiver, IntentFilters.disconnect, Context.RECEIVER_NOT_EXPORTED)
+            registerReceiver(keyCodeReceiver, IntentFilters.keyEvent, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(disconnectReceiver, IntentFilters.disconnect)
+            registerReceiver(keyCodeReceiver, IntentFilters.keyEvent)
+        }
     }
 
     val transport: AapTransport

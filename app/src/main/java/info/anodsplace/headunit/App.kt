@@ -17,7 +17,11 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        registerReceiver(AapBroadcastReceiver(), AapBroadcastReceiver.filter)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(AapBroadcastReceiver(), AapBroadcastReceiver.filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(AapBroadcastReceiver(), AapBroadcastReceiver.filter)
+        }
     }
 
     companion object {
