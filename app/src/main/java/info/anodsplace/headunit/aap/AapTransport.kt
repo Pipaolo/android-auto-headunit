@@ -3,7 +3,6 @@ package info.anodsplace.headunit.aap
 import android.app.UiModeManager
 import android.content.Context
 import android.content.Context.UI_MODE_SERVICE
-import android.media.AudioManager
 import android.os.*
 import android.util.SparseIntArray
 import android.view.KeyEvent
@@ -23,7 +22,6 @@ import java.util.*
 class AapTransport(
         audioDecoder: AudioDecoder,
         frameQueueProvider: () -> VideoFrameQueue?,
-        audioManager: AudioManager,
         private val settings: Settings,
         private val context: Context)
     : Handler.Callback, MicRecorder.Listener {
@@ -49,7 +47,7 @@ class AapTransport(
 
     init {
         micRecorder.listener = this
-        aapAudio = AapAudio(audioDecoder, audioManager)
+        aapAudio = AapAudio(audioDecoder)
         aapVideo = AapVideo(frameQueueProvider)
     }
 

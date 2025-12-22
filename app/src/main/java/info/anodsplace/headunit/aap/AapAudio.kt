@@ -17,15 +17,25 @@ import info.anodsplace.headunit.utils.AppLog
  * @link https://github.com/google/ExoPlayer/blob/release-v2/library/src/main/java/com/google/android/exoplayer2/audio/AudioTrack.java
  */
 internal class AapAudio(
-        private val audioDecoder: AudioDecoder,
-        private val audioManager: AudioManager) {
+        private val audioDecoder: AudioDecoder) {
 
     fun requestFocusChange(stream: Int, focusRequest: Int, callback: AudioManager.OnAudioFocusChangeListener) {
+        // Immediately grant focus without actually requesting from Android AudioManager.
+        // This prevents Android from ducking/lowering other audio when the phone requests focus
+        // (e.g., for touch feedback sounds or navigation prompts).
         when (focusRequest) {
-            Control.AudioFocusRequestNotification.AudioFocusRequestType.RELEASE_VALUE -> audioManager.abandonAudioFocus(callback)
-            Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_VALUE -> audioManager.requestAudioFocus(callback, stream, AudioManager.AUDIOFOCUS_GAIN)
-            Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_VALUE -> audioManager.requestAudioFocus(callback, stream, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-            Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_MAY_DUCK_VALUE -> audioManager.requestAudioFocus(callback, stream, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            Control.AudioFocusRequestNotification.AudioFocusRequestType.RELEASE_VALUE -> {
+                callback.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS)
+            }
+            Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_VALUE -> {
+                callback.onAudioFocusChange(AudioManager.AUDIOFOCUS_GAIN)
+            }
+            Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_VALUE -> {
+                callback.onAudioFocusChange(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            }
+            Control.AudioFocusRequestNotification.AudioFocusRequestType.GAIN_TRANSIENT_MAY_DUCK_VALUE -> {
+                callback.onAudioFocusChange(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            }
         }
     }
 

@@ -1,9 +1,5 @@
 package info.anodsplace.headunit
 
-import android.app.Application
-import android.app.NotificationManager
-import android.content.Context
-import android.media.AudioManager
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import info.anodsplace.headunit.aap.AapTransport
 import info.anodsplace.headunit.decoder.AudioDecoder
@@ -19,7 +15,6 @@ class AppComponent(private val app: App) {
                _transport = AapTransport(
                    audioDecoder,
                    { videoDecoderController.getFrameQueue() },
-                   audioManager,
                    settings,
                    app
                )
@@ -35,9 +30,6 @@ class AppComponent(private val app: App) {
         _transport?.quit()
         _transport = null
     }
-
-    private val audioManager: AudioManager
-        get() = app.getSystemService(Application.AUDIO_SERVICE) as AudioManager
 
     val localBroadcastManager = LocalBroadcastManager.getInstance(app)
 }
