@@ -11,25 +11,51 @@ import info.anodsplace.headunit.aap.protocol.proto.Media
 import info.anodsplace.headunit.aap.protocol.proto.Sensors
 import info.anodsplace.headunit.utils.AppLog
 import info.anodsplace.headunit.utils.Settings
+import info.anodsplace.headunit.view.AspectRatioCalculator
+import info.anodsplace.headunit.view.Margins
 
-class ServiceDiscoveryResponse(settings: Settings, densityDpi: Int, displayWidth: Int, displayHeight: Int) : AapMessage(Channel.ID_CTR, Control.ControlMsgType.SERVICEDISCOVERYRESPONSE_VALUE, makeProto(settings, densityDpi, displayWidth, displayHeight)) {
+class ServiceDiscoveryResponse(settings: Settings, @Suppress("UNUSED_PARAMETER") densityDpi: Int, displayWidth: Int, displayHeight: Int) : AapMessage(Channel.ID_CTR, Control.ControlMsgType.SERVICEDISCOVERYRESPONSE_VALUE, makeProto(settings, displayWidth, displayHeight)) {
 
     companion object {
-        private fun makeProto(settings: Settings, densityDpi: Int, displayWidth: Int, displayHeight: Int): MessageLite {
+        private fun makeProto(settings: Settings, displayWidth: Int, displayHeight: Int): MessageLite {
             val services = mutableListOf<Control.Service>()
 
             // Compute the appropriate resolution based on display dimensions
             val resolution = Screen.forDisplaySize(displayWidth, displayHeight)
             val screen = Screen.forResolution(resolution)
             
-            // Use manual DPI if set, otherwise compute based on screen stretch
-            val computedDpi = Screen.computeDpi(screen, displayWidth, displayHeight)
-            val effectiveDpi = if (settings.manualDpi > 0) settings.manualDpi else computedDpi
+            // Calculate letterbox margins and adjusted DPI if aspect ratio preservation is enabled
+            val letterboxResult = if (settings.preserveAspectRatio) {
+                AspectRatioCalculator.calculate(screen, displayWidth, displayHeight)
+            } else {
+                AspectRatioCalculator.Result(
+                    letterboxMargins = Margins.ZERO,
+                    adjustedDpi = screen.baseDpi,
+                    effectiveHeight = displayHeight
+                )
+            }
+            
+            // Get user-defined margins from settings
+            val userMargins = Margins(
+                top = settings.marginTop,
+                bottom = settings.marginBottom,
+                left = settings.marginLeft,
+                right = settings.marginRight
+            )
+            
+            // Combine letterbox and user margins
+            val combinedMargins = AspectRatioCalculator.combineMargins(
+                letterboxResult.letterboxMargins,
+                userMargins
+            )
+            
+            // Use manual DPI if set, otherwise use letterbox-adjusted DPI
+            val effectiveDpi = if (settings.manualDpi > 0) settings.manualDpi else letterboxResult.adjustedDpi
             
             // Store the computed resolution for ProjectionView to use
             settings.activeResolution = resolution
             
-            AppLog.i { "Display: ${displayWidth}x${displayHeight}, resolution: ${screen.width}x${screen.height}, DPI: $effectiveDpi (manual: ${settings.manualDpi}, computed: $computedDpi, device: $densityDpi)" }
+            AppLog.i { "Display: ${displayWidth}x${displayHeight}, resolution: ${screen.width}x${screen.height}, DPI: $effectiveDpi (manual: ${settings.manualDpi}, adjusted: ${letterboxResult.adjustedDpi}), margins: top=${combinedMargins.top}, bottom=${combinedMargins.bottom}" }
 
             val sensors = Control.Service.newBuilder().also { service ->
                 service.id = Channel.ID_SEN
@@ -49,8 +75,8 @@ class ServiceDiscoveryResponse(settings: Settings, densityDpi: Int, displayWidth
                     it.audioType = Media.AudioStreamType.AUDIO_STREAM_NONE
                     it.availableWhileInCall = true
                     it.addVideoConfigs(Control.Service.MediaSinkService.VideoConfiguration.newBuilder().apply {
-                        marginHeight = 0
-                        marginWidth = 0
+                        marginHeight = combinedMargins.vertical
+                        marginWidth = combinedMargins.horizontal
                         codecResolution = resolution
                         frameRate = Control.Service.MediaSinkService.VideoConfiguration.VideoFrameRateType.FPS_30
                         density = effectiveDpi

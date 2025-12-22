@@ -1,6 +1,8 @@
 package info.anodsplace.headunit.aap.protocol
 
 import info.anodsplace.headunit.aap.protocol.proto.Control
+import info.anodsplace.headunit.view.AspectRatioCalculator
+import info.anodsplace.headunit.view.Margins
 
 class Screen(val width: Int, val height: Int, val baseDpi: Int) {
     companion object {
@@ -55,20 +57,45 @@ class Screen(val width: Int, val height: Int, val baseDpi: Int) {
         }
 
         /**
-         * Compute the effective DPI for the video resolution when stretched to fill the display.
-         * 
-         * When the video is stretched to fill the display, the effective pixel density changes.
-         * This method computes the adjusted DPI to ensure UI elements appear at the correct size.
+         * Compute the DPI adjusted for letterboxing.
+         * When letterboxing reduces the effective display area, DPI is scaled proportionally
+         * so that UI elements maintain the same apparent size.
          *
          * @param screen The video resolution being requested
          * @param displayWidth The actual display width in pixels
          * @param displayHeight The actual display height in pixels
-         * @return The computed DPI to send to the phone
+         * @param preserveAspectRatio Whether aspect ratio preservation is enabled
+         * @return The adjusted DPI to send to the phone
          */
-        fun computeDpi(screen: Screen, displayWidth: Int, displayHeight: Int): Int {
-            // Just use the base DPI for the resolution - no stretch compensation
-            // The base DPI values are already tuned for typical car displays
-            return screen.baseDpi
+        fun computeLetterboxDpi(
+            screen: Screen,
+            displayWidth: Int,
+            displayHeight: Int,
+            preserveAspectRatio: Boolean
+        ): Int {
+            if (!preserveAspectRatio) {
+                return screen.baseDpi
+            }
+            
+            val result = AspectRatioCalculator.calculate(screen, displayWidth, displayHeight)
+            return result.adjustedDpi
+        }
+
+        /**
+         * Compute letterbox margins for aspect ratio preservation.
+         *
+         * @param screen The video resolution being requested
+         * @param displayWidth The actual display width in pixels
+         * @param displayHeight The actual display height in pixels
+         * @return The letterbox margins (top/bottom only, never left/right)
+         */
+        fun computeLetterboxMargins(
+            screen: Screen,
+            displayWidth: Int,
+            displayHeight: Int
+        ): Margins {
+            val result = AspectRatioCalculator.calculate(screen, displayWidth, displayHeight)
+            return result.letterboxMargins
         }
     }
 }

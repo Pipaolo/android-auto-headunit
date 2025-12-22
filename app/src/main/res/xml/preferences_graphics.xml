@@ -1,34 +1,101 @@
 <?xml version="1.0" encoding="utf-8"?>
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <ListPreference
-        android:key="resolution"
-        android:title="Resolution"
-        android:summary="Select video resolution"
-        android:entries="@array/resolution_entries"
-        android:entryValues="@array/resolution_values"
-        android:defaultValue="1080" />
+    <PreferenceCategory
+        android:title="Video">
 
-    <ListPreference
-        android:key="manual_dpi"
-        android:title="DPI Scale"
-        android:summary="Adjust UI element size (Auto = computed from screen)"
-        android:entries="@array/dpi_entries"
-        android:entryValues="@array/dpi_string_values"
-        android:defaultValue="0" />
+        <ListPreference
+            android:key="resolution"
+            android:title="Resolution"
+            android:summary="Select video resolution"
+            android:entries="@array/resolution_entries"
+            android:entryValues="@array/resolution_values"
+            android:defaultValue="1080" />
 
-    <SwitchPreferenceCompat
-        android:key="night_mode"
-        android:title="Night Mode"
-        android:summary="Enable dark mode for navigation"
-        android:defaultValue="false" />
+        <ListPreference
+            android:key="render_surface"
+            android:title="Render Surface"
+            android:summary="GLES 2.0 for better performance, SurfaceView for compatibility"
+            android:entries="@array/render_surface_entries"
+            android:entryValues="@array/render_surface_values"
+            android:defaultValue="0" />
 
-    <ListPreference
-        android:key="day_night_mode"
-        android:title="Day/Night Calculation"
-        android:summary="How to determine day or night mode"
-        android:entries="@array/day_night_entries"
-        android:entryValues="@array/day_night_values"
-        android:defaultValue="auto" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="Aspect Ratio">
+
+        <SwitchPreferenceCompat
+            android:key="preserve_aspect_ratio"
+            android:title="Preserve Aspect Ratio"
+            android:summary="Add letterbox bars to prevent distortion"
+            android:defaultValue="true" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="Margins">
+
+        <SeekBarPreference
+            android:key="margin_top"
+            android:title="Margin Top"
+            android:defaultValue="0"
+            app:min="0"
+            android:max="200"
+            app:showSeekBarValue="true" />
+
+        <SeekBarPreference
+            android:key="margin_bottom"
+            android:title="Margin Bottom"
+            android:defaultValue="0"
+            app:min="0"
+            android:max="200"
+            app:showSeekBarValue="true" />
+
+        <SeekBarPreference
+            android:key="margin_left"
+            android:title="Margin Left"
+            android:defaultValue="0"
+            app:min="0"
+            android:max="200"
+            app:showSeekBarValue="true" />
+
+        <SeekBarPreference
+            android:key="margin_right"
+            android:title="Margin Right"
+            android:defaultValue="0"
+            app:min="0"
+            android:max="200"
+            app:showSeekBarValue="true" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="Display">
+
+        <ListPreference
+            android:key="manual_dpi"
+            android:title="DPI Scale"
+            android:summary="Adjust UI element size (Auto = computed with letterbox scaling)"
+            android:entries="@array/dpi_entries"
+            android:entryValues="@array/dpi_string_values"
+            android:defaultValue="0" />
+
+        <SwitchPreferenceCompat
+            android:key="night_mode"
+            android:title="Night Mode"
+            android:summary="Enable dark mode for navigation"
+            android:defaultValue="false" />
+
+        <ListPreference
+            android:key="day_night_mode"
+            android:title="Day/Night Calculation"
+            android:summary="How to determine day or night mode"
+            android:entries="@array/day_night_entries"
+            android:entryValues="@array/day_night_values"
+            android:defaultValue="auto" />
+
+    </PreferenceCategory>
 
 </PreferenceScreen>

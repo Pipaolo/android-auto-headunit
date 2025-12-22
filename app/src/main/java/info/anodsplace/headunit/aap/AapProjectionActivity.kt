@@ -11,7 +11,6 @@ import android.view.MotionEvent
 import android.view.SurfaceHolder
 
 import info.anodsplace.headunit.App
-import info.anodsplace.headunit.aap.protocol.Screen
 import info.anodsplace.headunit.aap.protocol.messages.TouchEvent
 import info.anodsplace.headunit.aap.protocol.messages.VideoFocusEvent
 import info.anodsplace.headunit.app.SurfaceActivity
@@ -41,7 +40,7 @@ class AapProjectionActivity : SurfaceActivity(), SurfaceHolder.Callback {
         super.onCreate(savedInstanceState)
 
         surface.setSurfaceCallback(this)
-        surface.setOnTouchListener { _, event ->
+        surface.asView().setOnTouchListener { _, event ->
             sendTouchEvent(event)
             true
         }
@@ -88,9 +87,18 @@ class AapProjectionActivity : SurfaceActivity(), SurfaceHolder.Callback {
         val screen = surface.screen()
 
         // Calculate scale factors from rendered view to phone's expected resolution
-        // surface.width/height are the actual rendered dimensions (aspect-ratio corrected)
-        val scaleX = screen.width.toFloat() / surface.width
-        val scaleY = screen.height.toFloat() / surface.height
+        // Use effective width/height (after margins) for proper touch coordinate mapping
+        val effectiveWidth = surface.getEffectiveWidth()
+        val effectiveHeight = surface.getEffectiveHeight()
+        
+        // Fallback to view dimensions if effective size not yet calculated
+        val viewWidth = if (effectiveWidth > 0) effectiveWidth else surface.asView().width
+        val viewHeight = if (effectiveHeight > 0) effectiveHeight else surface.asView().height
+        
+        if (viewWidth <= 0 || viewHeight <= 0) return
+        
+        val scaleX = screen.width.toFloat() / viewWidth
+        val scaleY = screen.height.toFloat() / viewHeight
 
         // Reuse pre-allocated list to avoid GC pressure on Android 4.3
         pointerDataPool.clear()

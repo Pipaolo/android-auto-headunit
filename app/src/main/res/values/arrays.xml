@@ -78,4 +78,14 @@
         <item>16000</item>
         <item>44100</item>
     </string-array>
+
+    <!-- Render surface options -->
+    <string-array name="render_surface_entries">
+        <item>GLES 2.0 (TextureView)</item>
+        <item>SurfaceView (Compatibility)</item>
+    </string-array>
+    <string-array name="render_surface_values">
+        <item>0</item>
+        <item>1</item>
+    </string-array>
 </resources>
