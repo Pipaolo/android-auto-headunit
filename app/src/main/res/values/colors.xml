@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Existing colors (preserved) -->
     <color name="material_grey_500">#9E9E9E</color>
     <color name="material_grey_700">#616161</color>
     <color name="material_grey_900">#212121</color>
@@ -13,5 +14,19 @@
     <color name="text_second">#bdbebd</color>
     <color name="text_dark">#b5babd</color>
     <color name="black_overlay">#66000000</color>
+
+    <!-- Material Dark Theme Colors -->
+    <color name="background">#121212</color>
+    <color name="surface">#1E1E1E</color>
+    <color name="surfaceElevated">#2D2D2D</color>
+    <color name="primary">#00BCD4</color>
+    <color name="primaryDark">#0097A7</color>
+    <color name="primaryLight">#4DD0E1</color>
+    <color name="onPrimary">#000000</color>
+    <color name="textPrimary">#FFFFFF</color>
+    <color name="textSecondary">#B3B3B3</color>
+    <color name="divider">#3D3D3D</color>
+    <color name="error">#CF6679</color>
+    <color name="ripple">#33FFFFFF</color>
 
 </resources>
