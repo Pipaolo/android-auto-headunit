@@ -114,6 +114,7 @@ class SurfaceProjectionView : SurfaceView, SurfaceHolder.Callback, BaseProjectio
         AppLog.i { "surfaceDestroyed" }
         decoderStarted = false
         videoController.stop("surfaceDestroyed")
+        videoController.onSurfaceDestroyed()
         surfaceCallback?.surfaceDestroyed(holder)
     }
 }

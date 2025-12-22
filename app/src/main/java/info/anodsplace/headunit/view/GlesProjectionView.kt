@@ -134,6 +134,7 @@ class GlesProjectionView : TextureView, TextureView.SurfaceTextureListener, Base
         AppLog.i { "onSurfaceTextureDestroyed" }
         
         videoController.stop("surfaceTextureDestroyed")
+        videoController.onSurfaceDestroyed()
         
         surfaceHolderAdapter?.let { adapter ->
             surfaceCallback?.surfaceDestroyed(adapter)

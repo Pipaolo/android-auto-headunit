@@ -16,6 +16,11 @@ class VideoDecoderController {
     private var decodeThread: VideoDecodeThread? = null
 
     @Volatile private var surfaceReady = false
+    
+    // Store last surface info for restart capability
+    private var lastHolder: SurfaceHolder? = null
+    private var lastWidth: Int = 0
+    private var lastHeight: Int = 0
 
     /**
      * Called when surface becomes available for rendering.
@@ -30,26 +35,71 @@ class VideoDecoderController {
             // Cap height at 1080p (matches original behavior)
             val cappedHeight = minOf(height, 1080)
 
+            // Store for potential restart
+            lastHolder = holder
+            lastWidth = width
+            lastHeight = cappedHeight
+
             if (decodeThread != null) {
                 AppLog.i { "Decoder already running" }
                 return
             }
 
-            // Create components - capacity of 8 frames handles ~130ms at 60fps burst traffic
-            frameQueue = VideoFrameQueue(capacity = 8)
-            decodeThread = VideoDecodeThread(
-                queue = frameQueue!!,
-                surface = holder.surface,
-                width = width,
-                height = cappedHeight
-            )
-
-            // Start decode thread
-            decodeThread!!.start()
-            surfaceReady = true
-
-            AppLog.i { "Video pipeline started: ${width}x${cappedHeight}" }
+            startDecoder(holder, width, cappedHeight)
         }
+    }
+    
+    /**
+     * Restart the decoder using the last known surface.
+     * Called when a new connection starts but surface is already available.
+     */
+    fun restartIfSurfaceAvailable() {
+        synchronized(this) {
+            val holder = lastHolder
+            if (holder == null) {
+                AppLog.d { "Cannot restart decoder - no surface available" }
+                return
+            }
+            
+            if (decodeThread != null) {
+                AppLog.i { "Decoder already running, no restart needed" }
+                return
+            }
+            
+            // Check if surface is still valid
+            try {
+                val surface = holder.surface
+                if (surface == null || !surface.isValid) {
+                    AppLog.w { "Cannot restart decoder - surface is invalid" }
+                    lastHolder = null
+                    return
+                }
+            } catch (e: Exception) {
+                AppLog.w { "Cannot restart decoder - surface check failed: ${e.message}" }
+                lastHolder = null
+                return
+            }
+            
+            AppLog.i { "Restarting video decoder for new connection" }
+            startDecoder(holder, lastWidth, lastHeight)
+        }
+    }
+    
+    private fun startDecoder(holder: SurfaceHolder, width: Int, height: Int) {
+        // Create components - capacity of 8 frames handles ~130ms at 60fps burst traffic
+        frameQueue = VideoFrameQueue(capacity = 8)
+        decodeThread = VideoDecodeThread(
+            queue = frameQueue!!,
+            surface = holder.surface,
+            width = width,
+            height = height
+        )
+
+        // Start decode thread
+        decodeThread!!.start()
+        surfaceReady = true
+
+        AppLog.i { "Video pipeline started: ${width}x${height}" }
     }
 
     /**
@@ -75,8 +125,21 @@ class VideoDecoderController {
 
             decodeThread = null
             frameQueue = null
+            
+            // Note: we keep lastHolder so we can restart with same surface
 
             AppLog.i { "Video pipeline stopped: $reason" }
+        }
+    }
+    
+    /**
+     * Called when surface is destroyed - clears the stored surface reference.
+     */
+    fun onSurfaceDestroyed() {
+        synchronized(this) {
+            lastHolder = null
+            lastWidth = 0
+            lastHeight = 0
         }
     }
 

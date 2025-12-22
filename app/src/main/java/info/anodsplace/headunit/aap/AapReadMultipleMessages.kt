@@ -23,7 +23,10 @@ internal class AapReadMultipleMessages(
     private var consecutiveErrors = 0
     
     companion object {
-        private const val MAX_CONSECUTIVE_ERRORS = 3
+        // Brute force mode: keep trying for ~30 seconds before giving up
+        private const val MAX_CONSECUTIVE_ERRORS = 20
+        private const val INITIAL_RETRY_DELAY_MS = 200L
+        private const val MAX_RETRY_DELAY_MS = 2000L
     }
 
     override fun doRead(connection: AccessoryConnection): Int {
@@ -40,21 +43,32 @@ internal class AapReadMultipleMessages(
             
             // Give up after too many consecutive errors
             if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-                AppLog.e { "Max consecutive errors reached, stopping transport" }
+                AppLog.e { "Max consecutive errors reached ($MAX_CONSECUTIVE_ERRORS), stopping transport" }
                 return -1
             }
             
-            // Brief delay before retry
-            Thread.sleep(50)
+            // Exponential backoff: delay increases with each consecutive error
+            val delay = minOf(
+                INITIAL_RETRY_DELAY_MS * (1 shl (consecutiveErrors - 1)),
+                MAX_RETRY_DELAY_MS
+            )
+            AppLog.i { "USB read retry in ${delay}ms..." }
+            Thread.sleep(delay)
             return 0  // Keep polling, don't stop yet
         }
         
-        // Reset error counter on successful read
-        consecutiveErrors = 0
-        
         if (size == 0) {
+            // Timeout with no data - don't reset error counter
+            // USB might be intermittently failing
             return 0  // Timeout, keep polling
         }
+        
+        // Only reset error counter when we get ACTUAL DATA
+        if (consecutiveErrors > 0) {
+            AppLog.i { "USB read recovered after $consecutiveErrors errors" }
+            consecutiveErrors = 0
+        }
+        
         try {
             processBulk(size, recv_buffer)
         } catch (e: AapMessageHandler.HandleException) {

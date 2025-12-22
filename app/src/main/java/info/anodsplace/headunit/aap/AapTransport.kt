@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.os.*
 import android.util.SparseIntArray
 import android.view.KeyEvent
+import info.anodsplace.headunit.App
 import info.anodsplace.headunit.aap.protocol.Channel
 import info.anodsplace.headunit.aap.protocol.messages.*
 import info.anodsplace.headunit.aap.protocol.proto.Input
@@ -71,11 +72,11 @@ class AapTransport(
             }
             MSG_POLL -> {
                 pollCount++
-                if (pollCount <= 5) {
+                if (pollCount <= 10) {
                     AppLog.e { "Poll #$pollCount starting, connection=${connection?.isConnected}" }
                 }
                 val ret = aapRead?.read() ?: -1
-                if (pollCount <= 5) {
+                if (pollCount <= 10) {
                     AppLog.e { "Poll #$pollCount returned: $ret" }
                 }
                 if (handler == null) {
@@ -88,7 +89,10 @@ class AapTransport(
                 }
 
                 if (ret < 0) {
-                    AppLog.e { "Poll returned error, quitting transport" }
+                    if (pollCount <= 5) {
+                        AppLog.e { "Early poll failure (poll #$pollCount) - USB may need more time to stabilize" }
+                    }
+                    AppLog.e { "Poll returned error after $pollCount polls, quitting transport" }
                     this.quit()
                 }
                 true
@@ -133,12 +137,24 @@ class AapTransport(
             return false
         }
 
-        // On older devices (pre-Lollipop), USB connection needs time to stabilize after handshake
+        // USB connection needs time to stabilize after handshake
         // Without this delay, early poll reads may fail and critical setup messages can be lost
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.LOLLIPOP) {
-            AppLog.i { "Pre-Lollipop device: waiting for USB to stabilize..." }
-            Thread.sleep(200)
+        // Older Android versions (especially 4.3) need longer stabilization time
+        val stabilizationDelay = when {
+            android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.KITKAT -> {
+                AppLog.i { "Android 4.3: waiting 1000ms for USB to stabilize..." }
+                1000L
+            }
+            android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.LOLLIPOP -> {
+                AppLog.i { "Pre-Lollipop device: waiting 500ms for USB to stabilize..." }
+                500L
+            }
+            else -> {
+                AppLog.i { "Modern device: waiting 200ms for USB to stabilize..." }
+                200L
+            }
         }
+        Thread.sleep(stabilizationDelay)
 
         this.connection = connection
         pollCount = 0
@@ -150,6 +166,11 @@ class AapTransport(
         AppLog.e { "Starting poll thread, sending first MSG_POLL" }
         flushPendingMessages()
         handler!!.sendEmptyMessage(MSG_POLL)
+        
+        // Restart video decoder if surface is still available from previous connection
+        // This handles the case where activity stayed open during reconnection
+        App.provide(context).videoDecoderController.restartIfSurfaceAvailable()
+        
         // Create and start Transport Thread
         return true
     }
