@@ -116,6 +116,7 @@ class AapTransport(
         pollThread.quit()
         aapRead = null
         handler = null
+        aapVideo.reset()
         synchronized(pendingMessages) {
             pendingMessages.clear()
         }
@@ -123,10 +124,20 @@ class AapTransport(
 
     internal fun start(connection: AccessoryConnection): Boolean {
         AppLog.i { "Start Aap transport for $connection" }
+        
+        // Reset video state for new connection
+        aapVideo.reset()
 
         if (!handshake(connection)) {
             AppLog.e { "Handshake failed" }
             return false
+        }
+
+        // On older devices (pre-Lollipop), USB connection needs time to stabilize after handshake
+        // Without this delay, early poll reads may fail and critical setup messages can be lost
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.LOLLIPOP) {
+            AppLog.i { "Pre-Lollipop device: waiting for USB to stabilize..." }
+            Thread.sleep(200)
         }
 
         this.connection = connection

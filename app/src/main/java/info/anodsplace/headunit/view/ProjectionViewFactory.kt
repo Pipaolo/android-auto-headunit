@@ -1,6 +1,7 @@
 package info.anodsplace.headunit.view
 
 import android.content.Context
+import android.os.Build
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import info.anodsplace.headunit.utils.Settings
@@ -15,11 +16,21 @@ object ProjectionViewFactory {
     /**
      * Create a projection view based on settings.
      *
+     * On Android 4.4 and below (API < 21), always uses SurfaceView for better performance.
+     * TextureView has significant overhead on older devices due to lack of RenderThread
+     * and less efficient GPU compositing.
+     *
      * @param context The context for view creation
      * @param settings The app settings containing render surface preference
      * @return A BaseProjectionView instance (either GlesProjectionView or SurfaceProjectionView)
      */
     fun create(context: Context, settings: Settings): BaseProjectionView {
+        // Force SurfaceView on Android 4.4 and below for better performance
+        // TextureView lacks RenderThread support and has GPU overhead on older devices
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            return SurfaceProjectionView(context)
+        }
+        
         return when (settings.renderSurface) {
             Settings.RenderSurface.GLES_TEXTURE_VIEW -> GlesProjectionView(context)
             Settings.RenderSurface.SURFACE_VIEW -> SurfaceProjectionView(context)

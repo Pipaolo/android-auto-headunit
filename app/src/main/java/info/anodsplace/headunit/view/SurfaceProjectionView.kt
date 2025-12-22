@@ -1,7 +1,6 @@
 package info.anodsplace.headunit.view
 
 import android.content.Context
-import android.graphics.PixelFormat
 import android.os.Build
 import android.util.AttributeSet
 import android.view.SurfaceHolder
@@ -23,18 +22,14 @@ class SurfaceProjectionView : SurfaceView, SurfaceHolder.Callback, BaseProjectio
     private var surfaceCallback: SurfaceHolder.Callback? = null
     private var currentMargins = Margins.ZERO
     
+    // Track if decoder has been started to avoid double-start
+    private var decoderStarted = false
+    
     // The screen resolution that was negotiated with the phone
     private val screenConfig: Screen
         get() = Screen.forResolution(App.provide(context).settings.activeResolution)
 
     init {
-        // Configure SurfaceHolder for video playback
-        // On Android 5.0+ (API 21), let the system/MediaCodec handle format negotiation
-        // to avoid buffer queue issues with the new asynchronous RenderThread
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-            // Pre-Lollipop: Explicitly set pixel format for proper buffer allocation
-            holder.setFormat(PixelFormat.RGBX_8888)
-        }
         holder.addCallback(this)
     }
 
@@ -76,6 +71,7 @@ class SurfaceProjectionView : SurfaceView, SurfaceHolder.Callback, BaseProjectio
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        decoderStarted = false
         videoController.stop("onDetachedFromWindow")
     }
 
@@ -86,31 +82,37 @@ class SurfaceProjectionView : SurfaceView, SurfaceHolder.Callback, BaseProjectio
         // This enables hardware scaler usage which is efficient on all Android versions
         holder.setFixedSize(screenConfig.width, screenConfig.height)
         
-        // On Android 5.0+ (API 21), the BufferQueue uses triple buffering with async allocation.
-        // We need to ensure buffers are allocated before starting the decoder to avoid
-        // displaying stale/garbage frames during the transition.
+        // On Android 5.0+ (API 21), start decoder after posting to allow buffer allocation
+        // On pre-Lollipop, we must wait for surfaceChanged when buffers are fully allocated
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            // Post decoder start to next frame to allow buffer allocation to complete
             post {
-                if (isAttachedToWindow) {
+                if (windowToken != null && !decoderStarted) {
+                    decoderStarted = true
                     videoController.onSurfaceAvailable(holder, screenConfig.width, screenConfig.height)
                 }
             }
-        } else {
-            // Pre-Lollipop: Start decoder immediately (synchronous buffer model)
-            videoController.onSurfaceAvailable(holder, screenConfig.width, screenConfig.height)
         }
+        // Pre-Lollipop: decoder will be started in surfaceChanged after BufferQueue is ready
         
         surfaceCallback?.surfaceCreated(holder)
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         AppLog.i { "surfaceChanged: format=$format, size=${width}x${height}" }
+        
+        // On pre-Lollipop, start decoder here after BufferQueue is fully initialized
+        // This avoids "can't dequeue multiple buffers without setting the buffer count" error
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP && !decoderStarted) {
+            decoderStarted = true
+            videoController.onSurfaceAvailable(holder, screenConfig.width, screenConfig.height)
+        }
+        
         surfaceCallback?.surfaceChanged(holder, format, width, height)
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         AppLog.i { "surfaceDestroyed" }
+        decoderStarted = false
         videoController.stop("surfaceDestroyed")
         surfaceCallback?.surfaceDestroyed(holder)
     }
