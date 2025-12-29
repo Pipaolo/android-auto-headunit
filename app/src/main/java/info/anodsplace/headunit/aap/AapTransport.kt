@@ -14,7 +14,7 @@ import info.anodsplace.headunit.aap.protocol.proto.Input
 import info.anodsplace.headunit.aap.protocol.proto.Sensors
 import info.anodsplace.headunit.connection.AccessoryConnection
 import info.anodsplace.headunit.connection.AccessoryConnection.Companion.CONNECT_TIMEOUT
-import info.anodsplace.headunit.connection.NativeUsbAccessoryConnection
+import info.anodsplace.headunit.connection.UsbAccessoryConnection
 import info.anodsplace.headunit.contract.DisconnectIntent
 import info.anodsplace.headunit.contract.ProjectionActivityRequest
 import info.anodsplace.headunit.decoder.AudioDecoder
@@ -43,12 +43,12 @@ class AapTransport(
     }
     private val modeManager: UiModeManager =  context.getSystemService(UI_MODE_SERVICE) as UiModeManager
     private var connection: AccessoryConnection? = null
-    private var nativeConnection: NativeUsbAccessoryConnection? = null
+    private var usbConnection: UsbAccessoryConnection? = null
     private var aapRead: AapRead? = null
     private var messageHandler: AapMessageHandler? = null
     private var handler: Handler? = null
     private val pendingMessages = mutableListOf<AapMessage>()
-    private var useNativeUsb = false
+    private var useUsbPolling = false
 
     val isAlive: Boolean
         get() = pollThread.isAlive
@@ -126,8 +126,8 @@ class AapTransport(
         // Step 1: Immediately clear callbacks to prevent new messages during cleanup
         // This MUST happen first to avoid race conditions
         micRecorder.listener = null
-        if (useNativeUsb) {
-            nativeConnection?.let { conn ->
+        if (useUsbPolling) {
+            usbConnection?.let { conn ->
                 conn.onAudioMessage = null
                 conn.onVideoMessage = null
                 conn.onControlMessage = null
@@ -135,9 +135,9 @@ class AapTransport(
             }
         }
 
-        // Step 2: Stop native USB reading (stops async callbacks)
-        if (useNativeUsb) {
-            nativeConnection?.stopReading()
+        // Step 2: Stop USB reading (stops poll thread)
+        if (useUsbPolling) {
+            usbConnection?.stopReading()
         }
 
         // Step 3: Clear message handler so no further processing occurs
@@ -156,10 +156,10 @@ class AapTransport(
         // Step 6: Reset video state (safe now that callbacks are cleared)
         aapVideo.reset()
 
-        // Step 7: Clean up native USB references
-        if (useNativeUsb) {
-            nativeConnection = null
-            useNativeUsb = false
+        // Step 7: Clean up USB connection references
+        if (useUsbPolling) {
+            usbConnection = null
+            useUsbPolling = false
         }
 
         // Step 8: Notify that we're disconnecting - use LocalBroadcastManager for reliability
@@ -205,19 +205,19 @@ class AapTransport(
         this.connection = connection
         pollCount = 0
 
-        // Check if this is a native USB connection
-        if (connection is NativeUsbAccessoryConnection) {
-            return startNativeUsb(connection)
+        // Check if this is a USB connection with polling
+        if (connection is UsbAccessoryConnection) {
+            return startUsbPolling(connection)
         }
-        
-        // Legacy poll-based approach for non-native connections
+
+        // Legacy poll-based approach for socket connections
         return startLegacyPoll(connection)
     }
-    
-    private fun startNativeUsb(connection: NativeUsbAccessoryConnection): Boolean {
-        AppLog.i { "Starting native USB transport" }
-        useNativeUsb = true
-        nativeConnection = connection
+
+    private fun startUsbPolling(connection: UsbAccessoryConnection): Boolean {
+        AppLog.i { "Starting USB polling transport" }
+        useUsbPolling = true
+        usbConnection = connection
         
         // Create message handler
         messageHandler = AapMessageHandlerImpl(this, micRecorder, aapAudio, aapVideo, settings, context)
@@ -256,26 +256,26 @@ class AapTransport(
             quit()
         }
         
-        // Start the poll thread for sending messages (still needed for outbound)
+        // Start the poll thread for sending messages
         pollThread.start()
         handler = Handler(pollThread.looper, this)
         flushPendingMessages()
-        
-        // Start native async reading
-        AppLog.i { "Calling startReading() on native connection..." }
+
+        // Start USB polling
+        AppLog.i { "Calling startReading() on USB connection..." }
         connection.startReading()
-        AppLog.i { "startReading() returned, native USB should be reading now" }
+        AppLog.i { "startReading() returned, USB polling should be running now" }
 
         // Restart video decoder if surface is still available from previous connection
         App.provide(context).videoDecoderController.restartIfSurfaceAvailable()
 
-        AppLog.i { "Native USB transport started successfully" }
+        AppLog.i { "USB polling transport started successfully" }
         return true
     }
     
     private fun startLegacyPoll(connection: AccessoryConnection): Boolean {
         AppLog.i { "Starting legacy poll-based transport" }
-        useNativeUsb = false
+        useUsbPolling = false
         
         aapRead = AapRead.Factory.create(connection, this, micRecorder, aapAudio, aapVideo, settings, context)
 
