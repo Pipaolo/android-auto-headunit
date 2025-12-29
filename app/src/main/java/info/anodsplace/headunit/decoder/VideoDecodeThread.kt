@@ -102,13 +102,14 @@ class VideoDecodeThread(
                     val nalType = getNalType(frameBuffer)
 
                     // 4. Buffer SPS/PPS for codec configuration
+                    // We need BOTH SPS and PPS before initializing codec
                     when (nalType) {
                         NAL_TYPE_SPS -> {
                             bufferedSps = frameBuffer.copyOf(length)
                             AppLog.i { "Buffered SPS NAL unit ($length bytes)" }
 
-                            // Try to initialize codec if we have SPS
-                            if (!codecStarted) {
+                            // Try to initialize codec if we have BOTH SPS and PPS
+                            if (!codecStarted && bufferedPps != null) {
                                 tryInitCodecWithCsd()
                             }
                             continue // Don't feed SPS to codec as regular frame
@@ -117,7 +118,7 @@ class VideoDecodeThread(
                             bufferedPps = frameBuffer.copyOf(length)
                             AppLog.i { "Buffered PPS NAL unit ($length bytes)" }
 
-                            // Try to initialize codec if we now have both SPS and PPS
+                            // Try to initialize codec if we now have BOTH SPS and PPS
                             if (!codecStarted && bufferedSps != null) {
                                 tryInitCodecWithCsd()
                             }
@@ -174,14 +175,23 @@ class VideoDecodeThread(
 
     /**
      * Try to initialize codec with buffered SPS/PPS as CSD buffers.
-     * Called when we receive SPS or PPS.
+     * Called when we have both SPS and PPS buffered.
      */
     private fun tryInitCodecWithCsd() {
         val sps = bufferedSps
+        val pps = bufferedPps
+
         if (sps == null) {
             AppLog.d { "Cannot init codec - no SPS buffered yet" }
             return
         }
+
+        if (pps == null) {
+            AppLog.d { "Cannot init codec - no PPS buffered yet" }
+            return
+        }
+
+        AppLog.i { "Initializing codec with SPS (${sps.size} bytes) + PPS (${pps.size} bytes)" }
 
         try {
             codec = MediaCodec.createDecoderByType("video/avc")
@@ -191,14 +201,9 @@ class VideoDecodeThread(
             // Set CSD-0 (SPS) - required for decoder configuration
             // Using string literal for API 16+ compatibility (MediaFormat.KEY_CSD_0 not in all SDKs)
             format.setByteBuffer("csd-0", ByteBuffer.wrap(sps))
-            AppLog.i { "Set CSD-0 (SPS): ${sps.size} bytes" }
 
-            // Set CSD-1 (PPS) if available
-            val pps = bufferedPps
-            if (pps != null) {
-                format.setByteBuffer("csd-1", ByteBuffer.wrap(pps))
-                AppLog.i { "Set CSD-1 (PPS): ${pps.size} bytes" }
-            }
+            // Set CSD-1 (PPS) - required for proper decoding
+            format.setByteBuffer("csd-1", ByteBuffer.wrap(pps))
 
             // Low latency optimizations for real-time video
             if (Build.VERSION.SDK_INT >= 19) {
