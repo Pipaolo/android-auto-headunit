@@ -10,6 +10,7 @@ import info.anodsplace.headunit.aap.Utils
 import info.anodsplace.headunit.aap.protocol.Channel
 import info.anodsplace.headunit.aap.protocol.messages.Messages
 import info.anodsplace.headunit.utils.AppLog
+import info.anodsplace.headunit.utils.MessageDispatcher
 import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
 
@@ -36,10 +37,25 @@ class NativeUsbAccessoryConnection(
     private var nativeHandle: Long = 0
     private var useNativeForIO = false  // Start with Android API for handshake
 
-    // Message handler callbacks (set by AapTransport)
+    // Message dispatcher for decoupled processing
+    private val dispatcher = MessageDispatcher()
+
+    // Message handler callbacks (set by AapTransport, routed through dispatcher)
     var onAudioMessage: ((AapMessage) -> Unit)? = null
+        set(value) {
+            field = value
+            dispatcher.setCallback(MessageDispatcher.Type.AUDIO, value)
+        }
     var onVideoMessage: ((AapMessage) -> Unit)? = null
+        set(value) {
+            field = value
+            dispatcher.setCallback(MessageDispatcher.Type.VIDEO, value)
+        }
     var onControlMessage: ((AapMessage) -> Unit)? = null
+        set(value) {
+            field = value
+            dispatcher.setCallback(MessageDispatcher.Type.CONTROL, value)
+        }
     var onDisconnect: (() -> Unit)? = null
 
     // SSL for decryption
@@ -144,6 +160,9 @@ class NativeUsbAccessoryConnection(
     /**
      * Handle raw USB data - parse AAP messages from it.
      * Uses the same proven logic as AapReadMultipleMessages.
+     * 
+     * Messages are collected inside the synchronized block, then dispatched
+     * outside the lock to prevent blocking the USB callback.
      */
     private fun handleRawData(data: ByteArray, length: Int) {
         val currentSsl = ssl
@@ -151,6 +170,9 @@ class NativeUsbAccessoryConnection(
             AppLog.e { "SSL not set, cannot process data" }
             return
         }
+
+        // Collect parsed messages to dispatch outside the lock
+        val messages = mutableListOf<Triple<MessageDispatcher.Type, Int, AapMessage>>()
 
         synchronized(fifo) {
             // Add new data to FIFO buffer
@@ -205,11 +227,17 @@ class NativeUsbAccessoryConnection(
                     break
                 }
 
-                // Decrypt and handle message
+                // Decrypt message
                 try {
                     val msg = AapMessageIncoming.decrypt(recvHeader, 0, msgBuffer, currentSsl)
                     if (msg != null) {
-                        dispatchMessage(recvHeader.chan, msg)
+                        // Collect message for dispatch outside the lock
+                        val type = when {
+                            isAudioChannel(recvHeader.chan) -> MessageDispatcher.Type.AUDIO
+                            isVideoChannel(recvHeader.chan) -> MessageDispatcher.Type.VIDEO
+                            else -> MessageDispatcher.Type.CONTROL
+                        }
+                        messages.add(Triple(type, recvHeader.chan, msg))
                     } else {
                         AppLog.e { "Decrypt failed: chan=${recvHeader.chan} ${Channel.name(recvHeader.chan)} flags=${recvHeader.flags.toString(16)} enc_len=${recvHeader.enc_len}" }
                     }
@@ -221,16 +249,10 @@ class NativeUsbAccessoryConnection(
             // Compact buffer (move unprocessed data to beginning)
             fifo.compact()
         }
-    }
 
-    /**
-     * Dispatch a decrypted message to the appropriate handler.
-     */
-    private fun dispatchMessage(channel: Int, message: AapMessage) {
-        when {
-            isAudioChannel(channel) -> onAudioMessage?.invoke(message)
-            isVideoChannel(channel) -> onVideoMessage?.invoke(message)
-            else -> onControlMessage?.invoke(message)
+        // Dispatch messages OUTSIDE the lock (non-blocking enqueue)
+        messages.forEach { (type, channel, msg) ->
+            dispatcher.dispatch(type, channel, msg)
         }
     }
 
@@ -281,6 +303,9 @@ class NativeUsbAccessoryConnection(
                 AppLog.i { "Native USB initialized, handle=$handle" }
             }
 
+            // Start message dispatcher threads
+            dispatcher.start()
+
             NativeUsb.startReading(nativeHandle)
             AppLog.i { "Native USB reading started" }
         }
@@ -295,6 +320,8 @@ class NativeUsbAccessoryConnection(
                 NativeUsb.stopReading(nativeHandle)
             }
         }
+        // Stop dispatcher threads (outside synchronized to avoid deadlock)
+        dispatcher.stop()
     }
 
     override fun disconnect() {
