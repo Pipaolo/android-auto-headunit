@@ -9,11 +9,11 @@ package info.anodsplace.headunit.decoder
  * Uses lightweight synchronization to ensure memory visibility between
  * producer (USB callback thread) and consumer (decode thread).
  *
- * @param capacity Number of frame slots (default 6 for ~100ms at 60fps)
+ * @param capacity Number of frame slots (default 15 for ~250ms buffer at 60fps)
  * @param maxFrameSize Maximum bytes per frame (default 512KB to handle high-resolution I-frames)
  */
 class VideoFrameQueue(
-    private val capacity: Int = 6,
+    private val capacity: Int = 15,
     private val maxFrameSize: Int = MAX_FRAME_SIZE
 ) {
 

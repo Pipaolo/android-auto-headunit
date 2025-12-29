@@ -67,8 +67,9 @@ class VideoDecodeThread(
 
                 // 2. Check if we're falling behind and need to skip to next keyframe
                 // Only check AFTER codec is configured to avoid triggering during startup
+                // Use threshold of 12 (80% of queue capacity of 15) to avoid thrashing
                 val queueSize = queue.size()
-                if (codecConfigured && queueSize > 10 && !waitingForKeyframe) {
+                if (codecConfigured && queueSize > 12 && !waitingForKeyframe) {
                     // Queue backing up severely - skip to next keyframe to catch up
                     waitingForKeyframe = true
                     AppLog.w { "Queue backing up ($queueSize frames), waiting for keyframe" }
@@ -99,8 +100,14 @@ class VideoDecodeThread(
                         AppLog.i { "Codec configured (SPS received)" }
                     }
 
-                    // 6. Feed to codec if configured
+                    // 6. Validate and feed to codec if configured
                     if (codecConfigured) {
+                        // Validate NAL unit before feeding to codec
+                        if (!hasValidStartCode(frameBuffer)) {
+                            AppLog.w { "Invalid NAL start code, skipping frame" }
+                            continue
+                        }
+
                         if (feedInput(frameBuffer, length)) {
                             monitor.onFrameDecoded()
                         }

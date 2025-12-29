@@ -16,7 +16,7 @@ internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
         private const val NAL_TYPE_PPS = 8      // Picture Parameter Set
     }
 
-    // Lock for fragment reassembly - protects fragmentBuffer and fragmentArray
+    // Lock for fragment reassembly - protects fragmentBuffer, fragmentArray, and fragment state
     private val fragmentLock = Object()
 
     // Pre-allocated buffer for fragment reassembly - uses direct buffer to avoid extra copy
@@ -24,6 +24,10 @@ internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
 
     // Pre-allocated array for copying from direct buffer to queue - avoids per-frame allocation
     private val fragmentArray = ByteArray(MAX_FRAME_SIZE)
+
+    // Fragment state tracking to detect corruption
+    private var fragmentInProgress = false
+    private var fragmentExpectedChannel = -1
 
     // Lock for SPS/PPS cache - protects cachedSps, cachedPps, cachedSpsPpsSent
     private val cacheLock = Object()
@@ -68,12 +72,19 @@ internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
                 // First fragment - start reassembly
                 if (isValidNalUnit(buf, 10)) {
                     synchronized(fragmentLock) {
+                        // Reset any previous incomplete fragment
+                        if (fragmentInProgress) {
+                            AppLog.w { "Starting new fragment while previous incomplete, discarding old data" }
+                        }
                         fragmentBuffer.clear()
                         val dataLen = len - 10
                         if (dataLen <= MAX_FRAME_SIZE) {
                             fragmentBuffer.put(buf, 10, dataLen)
+                            fragmentInProgress = true
+                            fragmentExpectedChannel = message.channel
                         } else {
                             AppLog.e { "First fragment exceeds max frame size ($dataLen > $MAX_FRAME_SIZE)" }
+                            fragmentInProgress = false
                         }
                     }
                     return true
@@ -82,10 +93,22 @@ internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
             8 -> {
                 // Middle fragment - continue reassembly
                 synchronized(fragmentLock) {
+                    if (!fragmentInProgress) {
+                        // No first fragment received - discard this orphan fragment
+                        AppLog.w { "Middle fragment received without first fragment, discarding" }
+                        return true
+                    }
+                    if (message.channel != fragmentExpectedChannel) {
+                        AppLog.w { "Middle fragment channel mismatch (expected=$fragmentExpectedChannel, got=${message.channel}), discarding" }
+                        fragmentInProgress = false
+                        fragmentBuffer.clear()
+                        return true
+                    }
                     if (fragmentBuffer.remaining() >= len) {
                         fragmentBuffer.put(buf, 0, len)
                     } else {
                         AppLog.e { "Fragment buffer overflow, dropping frame (remaining=${fragmentBuffer.remaining()}, needed=$len)" }
+                        fragmentInProgress = false
                         fragmentBuffer.clear()
                     }
                 }
@@ -94,8 +117,20 @@ internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
             10 -> {
                 // Last fragment - complete and queue
                 synchronized(fragmentLock) {
+                    if (!fragmentInProgress) {
+                        // No first fragment received - discard
+                        AppLog.w { "Last fragment received without first fragment, discarding" }
+                        return true
+                    }
+                    if (message.channel != fragmentExpectedChannel) {
+                        AppLog.w { "Last fragment channel mismatch, discarding" }
+                        fragmentInProgress = false
+                        fragmentBuffer.clear()
+                        return true
+                    }
                     if (fragmentBuffer.remaining() < len) {
                         AppLog.e { "Fragment buffer overflow on last fragment, dropping frame" }
+                        fragmentInProgress = false
                         fragmentBuffer.clear()
                         return true
                     }
@@ -111,6 +146,8 @@ internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
 
                     queue.offer(fragmentArray, 0, frameSize)
 
+                    // Reset fragment state
+                    fragmentInProgress = false
                     fragmentBuffer.clear()
                 }
                 return true
@@ -178,6 +215,8 @@ internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
         }
         synchronized(fragmentLock) {
             fragmentBuffer.clear()
+            fragmentInProgress = false
+            fragmentExpectedChannel = -1
         }
     }
 
