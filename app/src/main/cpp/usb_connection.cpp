@@ -10,15 +10,10 @@
 
 namespace aap {
 
-// Buffer size for ring buffer (500KB - about 100ms of audio)
-constexpr size_t READ_BUFFER_SIZE = 512 * 1024;
-
 // USB timeouts
 constexpr int WRITE_TIMEOUT_MS = 1000;
 
-UsbConnection::UsbConnection()
-    : readBuffer_(READ_BUFFER_SIZE)
-{}
+UsbConnection::UsbConnection() = default;
 
 UsbConnection::~UsbConnection() {
     close();
@@ -32,8 +27,15 @@ bool UsbConnection::open(int fd) {
 
     LOGI("Opening USB connection with fd=%d", fd);
 
+    // On Android with wrapped file descriptors, we must disable device discovery
+    // since we're using Android's USB subsystem to get the FD
+    int rc = libusb_set_option(nullptr, LIBUSB_OPTION_NO_DEVICE_DISCOVERY);
+    if (rc != LIBUSB_SUCCESS) {
+        LOGE("libusb_set_option(NO_DEVICE_DISCOVERY) failed: %s (continuing anyway)", libusb_error_name(rc));
+    }
+
     // Initialize libusb
-    int rc = libusb_init(&context_);
+    rc = libusb_init(&context_);
     if (rc != LIBUSB_SUCCESS) {
         setError("libusb_init failed: %s", libusb_error_name(rc));
         return false;
@@ -62,16 +64,10 @@ bool UsbConnection::open(int fd) {
         return false;
     }
 
-    // Claim interface
-    rc = libusb_claim_interface(deviceHandle_, 0);
-    if (rc != LIBUSB_SUCCESS) {
-        setError("libusb_claim_interface failed: %s", libusb_error_name(rc));
-        libusb_close(deviceHandle_);
-        deviceHandle_ = nullptr;
-        libusb_exit(context_);
-        context_ = nullptr;
-        return false;
-    }
+    // When using libusb_wrap_sys_device with an Android file descriptor,
+    // the interface is already claimed by Android's UsbDeviceConnection.
+    // We should NOT call libusb_claim_interface as it will fail with BUSY.
+    LOGI("Skipping interface claim - Android already claimed it");
 
     LOGI("USB connection opened successfully");
     LOGI("  IN endpoint: 0x%02x, OUT endpoint: 0x%02x", inEndpoint_, outEndpoint_);
@@ -85,7 +81,7 @@ void UsbConnection::close() {
 
     if (deviceHandle_) {
         LOGI("Closing USB connection");
-        libusb_release_interface(deviceHandle_, 0);
+        // Don't release interface - Android owns it, not libusb
         libusb_close(deviceHandle_);
         deviceHandle_ = nullptr;
     }
@@ -153,9 +149,9 @@ bool UsbConnection::findEndpoints() {
     return true;
 }
 
-void UsbConnection::setDispatcher(ChannelDispatcher* dispatcher) {
+void UsbConnection::setRawDataCallback(RawDataCallback callback) {
     std::lock_guard<std::mutex> lock(callbackMutex_);
-    dispatcher_ = dispatcher;
+    rawDataCallback_ = std::move(callback);
 }
 
 void UsbConnection::setErrorCallback(ErrorCallback callback) {
@@ -268,6 +264,7 @@ void LIBUSB_CALL UsbConnection::transferCallback(libusb_transfer* transfer) {
     } else {
         LOGE("Transfer failed: status=%d", transfer->status);
         // Report error but try to continue
+        std::lock_guard<std::mutex> lock(t->connection->callbackMutex_);
         if (t->connection->errorCallback_) {
             t->connection->errorCallback_(transfer->status, "USB transfer failed");
         }
@@ -281,87 +278,21 @@ void LIBUSB_CALL UsbConnection::transferCallback(libusb_transfer* transfer) {
 
 void UsbConnection::handleTransferComplete(Transfer& transfer, int actualLength) {
     if (actualLength > 0) {
-        processReceivedData(transfer.buffer, actualLength);
-    }
-}
-
-void UsbConnection::processReceivedData(const uint8_t* data, size_t length) {
-    // Write to ring buffer (this is fast, no blocking)
-    size_t written = readBuffer_.write(data, length);
-    if (written < length) {
-        LOGE("Ring buffer overflow, dropped %zu bytes", length - written);
-    }
-
-    // Process complete messages from the buffer
-    while (true) {
-        if (readingHeader_) {
-            // Try to read header
-            size_t needed = 4 - headerPos_;
-            size_t got = readBuffer_.read(headerBuf_ + headerPos_, needed);
-            headerPos_ += got;
-
-            if (headerPos_ < 4) {
-                break; // Not enough data yet
-            }
-
-            // Parse header
-            uint8_t channel = headerBuf_[0];
-            uint8_t flags = headerBuf_[1];
-            uint16_t encLen = (static_cast<uint16_t>(headerBuf_[2]) << 8) | headerBuf_[3];
-
-            // Validate
-            if ((flags & 0x08) != 0x08) {
-                LOGE("Invalid flags in header: 0x%02x", flags);
-                // Try to resync by skipping a byte
-                headerBuf_[0] = headerBuf_[1];
-                headerBuf_[1] = headerBuf_[2];
-                headerBuf_[2] = headerBuf_[3];
-                headerPos_ = 3;
-                continue;
-            }
-
-            if (encLen > 65535) {
-                LOGE("Invalid message length: %d", encLen);
-                headerPos_ = 0;
-                continue;
-            }
-
-            // Prepare for message body
-            messageExpected_ = encLen;
-            messagePos_ = 0;
-            messageBuf_.resize(encLen + 4); // Include header for Kotlin
-            memcpy(messageBuf_.data(), headerBuf_, 4);
-            readingHeader_ = false;
-            headerPos_ = 0;
-        }
-
-        // Try to read message body
-        size_t needed = messageExpected_ - messagePos_;
-        size_t got = readBuffer_.read(messageBuf_.data() + 4 + messagePos_, needed);
-        messagePos_ += got;
-
-        if (messagePos_ < messageExpected_) {
-            break; // Not enough data yet
-        }
-
-        // Message complete - dispatch it
-        uint8_t channel = messageBuf_[0];
-
+        // Pass raw data directly to Kotlin for parsing
         std::lock_guard<std::mutex> lock(callbackMutex_);
-        if (dispatcher_) {
-            // Pass the encrypted message data (header + body)
-            dispatcher_->dispatch(channel, messageBuf_.data(), messageBuf_.size());
+        if (rawDataCallback_) {
+            rawDataCallback_(transfer.buffer, actualLength);
         }
-
-        // Ready for next message
-        readingHeader_ = true;
     }
 }
 
 int UsbConnection::write(const uint8_t* data, size_t length) {
     if (!deviceHandle_) {
+        LOGE("Write failed: device not open");
         return -1;
     }
+
+    LOGD("Write: attempting %zu bytes to endpoint 0x%02x", length, outEndpoint_);
 
     int transferred = 0;
     int rc = libusb_bulk_transfer(
@@ -374,10 +305,43 @@ int UsbConnection::write(const uint8_t* data, size_t length) {
     );
 
     if (rc != LIBUSB_SUCCESS && rc != LIBUSB_ERROR_TIMEOUT) {
-        LOGE("Write failed: %s", libusb_error_name(rc));
+        LOGE("Write failed: %s (rc=%d)", libusb_error_name(rc), rc);
         return -1;
     }
 
+    LOGD("Write completed: %d bytes transferred", transferred);
+    return transferred;
+}
+
+int UsbConnection::read(uint8_t* buffer, size_t length, int timeoutMs) {
+    if (!deviceHandle_) {
+        LOGE("Read failed: device not open");
+        return -1;
+    }
+
+    LOGD("Read: attempting up to %zu bytes from endpoint 0x%02x, timeout=%dms", length, inEndpoint_, timeoutMs);
+
+    int transferred = 0;
+    int rc = libusb_bulk_transfer(
+        deviceHandle_,
+        inEndpoint_,
+        buffer,
+        static_cast<int>(length),
+        &transferred,
+        timeoutMs
+    );
+
+    if (rc == LIBUSB_ERROR_TIMEOUT) {
+        LOGD("Read timeout after %dms, transferred %d bytes", timeoutMs, transferred);
+        return transferred;
+    }
+
+    if (rc != LIBUSB_SUCCESS) {
+        LOGE("Read failed: %s (rc=%d)", libusb_error_name(rc), rc);
+        return -1;
+    }
+
+    LOGD("Read completed: %d bytes", transferred);
     return transferred;
 }
 

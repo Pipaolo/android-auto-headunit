@@ -1,8 +1,6 @@
 #pragma once
 
 #include "libusb.h"
-#include "channel_dispatcher.h"
-#include "ring_buffer.h"
 #include <thread>
 #include <atomic>
 #include <mutex>
@@ -17,10 +15,21 @@ namespace aap {
 using ErrorCallback = std::function<void(int errorCode, const char* message)>;
 
 /**
+ * Raw data callback type.
+ * Parameters: data pointer, data length
+ * Called directly from USB event thread for each USB transfer.
+ * Kotlin handles message parsing and decryption.
+ */
+using RawDataCallback = std::function<void(const uint8_t* data, size_t length)>;
+
+/**
  * USB connection wrapper using libusb for async I/O.
  *
  * Takes a file descriptor from Android's UsbDeviceConnection and wraps
  * it with libusb for high-performance async transfers.
+ *
+ * This class handles raw USB I/O only - message parsing and TLS
+ * decryption are handled in Kotlin for correctness.
  */
 class UsbConnection {
 public:
@@ -49,9 +58,11 @@ public:
     bool isOpen() const { return deviceHandle_ != nullptr; }
 
     /**
-     * Set the channel dispatcher for routing incoming messages.
+     * Set raw data callback.
+     * Called for each USB transfer with raw bytes.
+     * Kotlin handles message framing and decryption.
      */
-    void setDispatcher(ChannelDispatcher* dispatcher);
+    void setRawDataCallback(RawDataCallback callback);
 
     /**
      * Set error callback.
@@ -60,7 +71,7 @@ public:
 
     /**
      * Start async reading from USB.
-     * Incoming data will be dispatched via the ChannelDispatcher.
+     * Raw data will be delivered via the RawDataCallback.
      */
     void startReading();
 
@@ -70,12 +81,21 @@ public:
     void stopReading();
 
     /**
-     * Write data to USB (synchronous for now, could be made async).
+     * Write data to USB (synchronous).
      * @param data Data to write
      * @param length Length of data
      * @return Number of bytes written, or negative on error
      */
     int write(const uint8_t* data, size_t length);
+
+    /**
+     * Read data from USB (synchronous, for handshake).
+     * @param buffer Buffer to read into
+     * @param length Maximum bytes to read
+     * @param timeoutMs Timeout in milliseconds
+     * @return Number of bytes read, or negative on error
+     */
+    int read(uint8_t* buffer, size_t length, int timeoutMs);
 
     /**
      * Get the last error message.
@@ -108,17 +128,8 @@ private:
     std::thread eventThread_;
     std::atomic<bool> running_{false};
 
-    // Message parsing state
-    RingBuffer readBuffer_;
-    uint8_t headerBuf_[4];
-    size_t headerPos_ = 0;
-    std::vector<uint8_t> messageBuf_;
-    size_t messagePos_ = 0;
-    size_t messageExpected_ = 0;
-    bool readingHeader_ = true;
-
-    // Dispatcher and callbacks
-    ChannelDispatcher* dispatcher_ = nullptr;
+    // Callbacks
+    RawDataCallback rawDataCallback_;
     ErrorCallback errorCallback_;
     std::mutex callbackMutex_;
 
@@ -130,7 +141,6 @@ private:
     void submitTransfer(Transfer& transfer);
     static void LIBUSB_CALL transferCallback(libusb_transfer* transfer);
     void handleTransferComplete(Transfer& transfer, int actualLength);
-    void processReceivedData(const uint8_t* data, size_t length);
     void eventLoop();
     void setError(const char* format, ...);
 };

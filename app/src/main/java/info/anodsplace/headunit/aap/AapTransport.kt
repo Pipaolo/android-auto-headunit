@@ -242,11 +242,13 @@ class AapTransport(
         flushPendingMessages()
         
         // Start native async reading
+        AppLog.i { "Calling startReading() on native connection..." }
         connection.startReading()
-        
+        AppLog.i { "startReading() returned, native USB should be reading now" }
+
         // Restart video decoder if surface is still available from previous connection
         App.provide(context).videoDecoderController.restartIfSurfaceAvailable()
-        
+
         AppLog.i { "Native USB transport started successfully" }
         return true
     }

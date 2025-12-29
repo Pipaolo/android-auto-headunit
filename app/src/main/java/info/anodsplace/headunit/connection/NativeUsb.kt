@@ -21,15 +21,17 @@ object NativeUsb {
     }
 
     // Callbacks - set by NativeUsbAccessoryConnection
-    @Volatile
-    var audioCallback: ((channel: Int, data: ByteArray, length: Int) -> Unit)? = null
 
+    /**
+     * Raw data callback - receives raw USB bytes for parsing in Kotlin.
+     * Messages are delivered from the USB event thread sequentially.
+     */
     @Volatile
-    var videoCallback: ((channel: Int, data: ByteArray, length: Int) -> Unit)? = null
+    var rawDataCallback: ((data: ByteArray, length: Int) -> Unit)? = null
 
-    @Volatile
-    var controlCallback: ((channel: Int, data: ByteArray, length: Int) -> Unit)? = null
-
+    /**
+     * Error callback - receives USB error notifications.
+     */
     @Volatile
     var errorCallback: ((errorCode: Int, message: String) -> Unit)? = null
 
@@ -48,6 +50,9 @@ object NativeUsb {
 
     @JvmStatic
     private external fun nativeWrite(handle: Long, data: ByteArray, length: Int): Int
+
+    @JvmStatic
+    private external fun nativeRead(handle: Long, data: ByteArray, length: Int, timeoutMs: Int): Int
 
     @JvmStatic
     private external fun nativeIsOpen(handle: Long): Boolean
@@ -106,32 +111,30 @@ object NativeUsb {
         return nativeIsOpen(handle)
     }
 
+    /**
+     * Read data from USB synchronously (for handshake).
+     * @param handle The handle returned from open()
+     * @param data The buffer to read into
+     * @param length The maximum number of bytes to read
+     * @param timeoutMs The timeout in milliseconds
+     * @return The number of bytes read, or negative on error
+     */
+    fun read(handle: Long, data: ByteArray, length: Int, timeoutMs: Int): Int {
+        return nativeRead(handle, data, length, timeoutMs)
+    }
+
     // Callbacks from native code (called on native threads)
 
+    /**
+     * Raw data callback - called with raw USB bytes.
+     * Kotlin handles all message parsing and TLS decryption.
+     */
     @JvmStatic
-    fun onAudioData(channel: Int, data: ByteArray, length: Int) {
+    fun onRawData(data: ByteArray, length: Int) {
         try {
-            audioCallback?.invoke(channel, data, length)
+            rawDataCallback?.invoke(data, length)
         } catch (e: Exception) {
-            AppLog.e(e) { "Error in audio callback" }
-        }
-    }
-
-    @JvmStatic
-    fun onVideoData(channel: Int, data: ByteArray, length: Int) {
-        try {
-            videoCallback?.invoke(channel, data, length)
-        } catch (e: Exception) {
-            AppLog.e(e) { "Error in video callback" }
-        }
-    }
-
-    @JvmStatic
-    fun onControlData(channel: Int, data: ByteArray, length: Int) {
-        try {
-            controlCallback?.invoke(channel, data, length)
-        } catch (e: Exception) {
-            AppLog.e(e) { "Error in control callback" }
+            AppLog.e(e) { "Error in raw data callback" }
         }
     }
 

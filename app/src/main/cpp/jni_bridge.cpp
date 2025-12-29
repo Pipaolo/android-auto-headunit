@@ -1,7 +1,6 @@
 #include <jni.h>
 #include <android/log.h>
 #include "usb_connection.h"
-#include "channel_dispatcher.h"
 #include <unordered_map>
 #include <mutex>
 
@@ -15,7 +14,6 @@ namespace {
 // Connection handle management
 struct ConnectionHandle {
     std::unique_ptr<aap::UsbConnection> connection;
-    std::unique_ptr<aap::ChannelDispatcher> dispatcher;
 };
 
 std::mutex handlesMutex;
@@ -25,9 +23,7 @@ jlong nextHandle = 1;
 // Cached JNI references
 JavaVM* javaVm = nullptr;
 jclass nativeUsbClass = nullptr;
-jmethodID onAudioDataMethod = nullptr;
-jmethodID onVideoDataMethod = nullptr;
-jmethodID onControlDataMethod = nullptr;
+jmethodID onRawDataMethod = nullptr;
 jmethodID onErrorMethod = nullptr;
 
 // Get JNIEnv for current thread
@@ -39,49 +35,25 @@ JNIEnv* getEnv() {
     return env;
 }
 
-// Callback helpers
-void callAudioCallback(int channel, const uint8_t* data, size_t length) {
+// Callback for raw USB data
+void callRawDataCallback(const uint8_t* data, size_t length) {
     JNIEnv* env = getEnv();
-    if (!env || !nativeUsbClass || !onAudioDataMethod) return;
+    if (!env || !nativeUsbClass || !onRawDataMethod) {
+        LOGE("callRawDataCallback: JNI not ready");
+        return;
+    }
 
     jbyteArray jdata = env->NewByteArray(static_cast<jsize>(length));
     if (jdata) {
         env->SetByteArrayRegion(jdata, 0, static_cast<jsize>(length),
                                 reinterpret_cast<const jbyte*>(data));
-        env->CallStaticVoidMethod(nativeUsbClass, onAudioDataMethod,
-                                  channel, jdata, static_cast<jint>(length));
+        env->CallStaticVoidMethod(nativeUsbClass, onRawDataMethod,
+                                  jdata, static_cast<jint>(length));
         env->DeleteLocalRef(jdata);
     }
 }
 
-void callVideoCallback(int channel, const uint8_t* data, size_t length) {
-    JNIEnv* env = getEnv();
-    if (!env || !nativeUsbClass || !onVideoDataMethod) return;
-
-    jbyteArray jdata = env->NewByteArray(static_cast<jsize>(length));
-    if (jdata) {
-        env->SetByteArrayRegion(jdata, 0, static_cast<jsize>(length),
-                                reinterpret_cast<const jbyte*>(data));
-        env->CallStaticVoidMethod(nativeUsbClass, onVideoDataMethod,
-                                  channel, jdata, static_cast<jint>(length));
-        env->DeleteLocalRef(jdata);
-    }
-}
-
-void callControlCallback(int channel, const uint8_t* data, size_t length) {
-    JNIEnv* env = getEnv();
-    if (!env || !nativeUsbClass || !onControlDataMethod) return;
-
-    jbyteArray jdata = env->NewByteArray(static_cast<jsize>(length));
-    if (jdata) {
-        env->SetByteArrayRegion(jdata, 0, static_cast<jsize>(length),
-                                reinterpret_cast<const jbyte*>(data));
-        env->CallStaticVoidMethod(nativeUsbClass, onControlDataMethod,
-                                  channel, jdata, static_cast<jint>(length));
-        env->DeleteLocalRef(jdata);
-    }
-}
-
+// Callback for errors
 void callErrorCallback(int errorCode, const char* message) {
     JNIEnv* env = getEnv();
     if (!env || !nativeUsbClass || !onErrorMethod) return;
@@ -125,12 +97,10 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     nativeUsbClass = reinterpret_cast<jclass>(env->NewGlobalRef(localClass));
     env->DeleteLocalRef(localClass);
 
-    onAudioDataMethod = env->GetStaticMethodID(nativeUsbClass, "onAudioData", "(I[BI)V");
-    onVideoDataMethod = env->GetStaticMethodID(nativeUsbClass, "onVideoData", "(I[BI)V");
-    onControlDataMethod = env->GetStaticMethodID(nativeUsbClass, "onControlData", "(I[BI)V");
+    onRawDataMethod = env->GetStaticMethodID(nativeUsbClass, "onRawData", "([BI)V");
     onErrorMethod = env->GetStaticMethodID(nativeUsbClass, "onError", "(ILjava/lang/String;)V");
 
-    if (!onAudioDataMethod || !onVideoDataMethod || !onControlDataMethod || !onErrorMethod) {
+    if (!onRawDataMethod || !onErrorMethod) {
         LOGE("Failed to find callback methods");
         return JNI_ERR;
     }
@@ -165,15 +135,9 @@ Java_info_anodsplace_headunit_connection_NativeUsb_nativeOpen(
 
     auto handle = std::make_unique<ConnectionHandle>();
     handle->connection = std::make_unique<aap::UsbConnection>();
-    handle->dispatcher = std::make_unique<aap::ChannelDispatcher>();
 
-    // Set up dispatcher callbacks
-    handle->dispatcher->setAudioCallback(callAudioCallback);
-    handle->dispatcher->setVideoCallback(callVideoCallback);
-    handle->dispatcher->setControlCallback(callControlCallback);
-
-    // Connect dispatcher to USB connection
-    handle->connection->setDispatcher(handle->dispatcher.get());
+    // Set up raw data callback - Kotlin handles parsing
+    handle->connection->setRawDataCallback(callRawDataCallback);
     handle->connection->setErrorCallback(callErrorCallback);
 
     // Open USB device
@@ -213,7 +177,6 @@ Java_info_anodsplace_headunit_connection_NativeUsb_nativeStartReading(
 
     ConnectionHandle* h = getHandle(handle);
     if (h) {
-        h->dispatcher->start();
         h->connection->startReading();
     }
 }
@@ -227,7 +190,6 @@ Java_info_anodsplace_headunit_connection_NativeUsb_nativeStopReading(
     ConnectionHandle* h = getHandle(handle);
     if (h) {
         h->connection->stopReading();
-        h->dispatcher->stop();
     }
 }
 
@@ -235,20 +197,52 @@ JNIEXPORT jint JNICALL
 Java_info_anodsplace_headunit_connection_NativeUsb_nativeWrite(
         JNIEnv* env, jclass clazz, jlong handle, jbyteArray data, jint length) {
 
+    LOGD("nativeWrite called: handle=%ld, length=%d", (long)handle, length);
+
     ConnectionHandle* h = getHandle(handle);
     if (!h) {
+        LOGE("nativeWrite: invalid handle %ld", (long)handle);
         return -1;
     }
 
     jbyte* bytes = env->GetByteArrayElements(data, nullptr);
     if (!bytes) {
+        LOGE("nativeWrite: failed to get byte array");
         return -1;
     }
 
     int result = h->connection->write(reinterpret_cast<uint8_t*>(bytes), length);
+    LOGD("nativeWrite: result=%d", result);
 
     env->ReleaseByteArrayElements(data, bytes, JNI_ABORT);
 
+    return result;
+}
+
+JNIEXPORT jint JNICALL
+Java_info_anodsplace_headunit_connection_NativeUsb_nativeRead(
+        JNIEnv* env, jclass clazz, jlong handle, jbyteArray data, jint length, jint timeoutMs) {
+
+    LOGD("nativeRead called: handle=%ld, length=%d, timeout=%d", (long)handle, length, timeoutMs);
+
+    ConnectionHandle* h = getHandle(handle);
+    if (!h) {
+        LOGE("nativeRead: invalid handle");
+        return -1;
+    }
+
+    jbyte* bytes = env->GetByteArrayElements(data, nullptr);
+    if (!bytes) {
+        LOGE("nativeRead: failed to get byte array");
+        return -1;
+    }
+
+    int result = h->connection->read(reinterpret_cast<uint8_t*>(bytes), length, timeoutMs);
+
+    // Copy data back to Java array
+    env->ReleaseByteArrayElements(data, bytes, 0);
+
+    LOGD("nativeRead: result=%d", result);
     return result;
 }
 
