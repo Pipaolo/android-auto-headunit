@@ -35,7 +35,7 @@ class MessageDispatcher {
         Type.AUDIO to DispatcherThread(
             name = "AAP-Audio-Dispatch",
             priority = Process.THREAD_PRIORITY_URGENT_AUDIO,
-            capacity = 64  // ~1 second of audio frames
+            capacity = 128  // ~2 seconds of audio frames, absorbs USB jitter
         ),
         Type.VIDEO to DispatcherThread(
             name = "AAP-Video-Dispatch",
