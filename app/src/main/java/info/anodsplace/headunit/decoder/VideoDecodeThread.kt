@@ -60,6 +60,7 @@ class VideoDecodeThread(
         // NOTE: Codec is NOT initialized here - we wait for SPS NAL unit
         running = true
 
+        android.util.Log.w("VideoDebug", "VideoDecodeThread started, waiting for SPS+PPS")
         AppLog.i { "VideoDecodeThread started, waiting for SPS to configure codec" }
 
         // Post decode loop to our handler
@@ -68,10 +69,15 @@ class VideoDecodeThread(
 
     private fun decodeLoop() {
         var emptyPollCount = 0
+        var frameCount = 0
+
+        // Pending frame that couldn't be fed to codec (waiting for input buffer)
+        var pendingFrameLength = 0
 
         while (running) {
             try {
                 // 1. Always drain output first to free buffers and render frames (if codec started)
+                // This is CRITICAL - must drain before trying to feed input to avoid deadlock
                 if (codecStarted) {
                     drainOutput()
                 }
@@ -86,8 +92,28 @@ class VideoDecodeThread(
                     AppLog.w { "Queue backing up ($queueSize frames), waiting for keyframe" }
                 }
 
-                // 3. Poll queue for new frame
+                // 3. If we have a pending frame from previous iteration, try to feed it first
+                if (pendingFrameLength > 0) {
+                    if (feedInput(frameBuffer, pendingFrameLength)) {
+                        monitor.onFrameDecoded()
+                        pendingFrameLength = 0  // Successfully fed, clear pending
+                    } else {
+                        // Still can't feed - drain output and retry next iteration
+                        // Small sleep to avoid tight spin when codec is busy
+                        Thread.sleep(1)
+                        continue
+                    }
+                }
+
+                // 4. Poll queue for new frame
                 val length = queue.poll(frameBuffer)
+
+                // Log first few frames for debugging
+                if (length > 0 && frameCount < 10) {
+                    val hexDump = frameBuffer.take(8).joinToString(" ") { String.format("%02X", it) }
+                    android.util.Log.w("VideoDebug", "Frame #$frameCount: len=$length, first8bytes=$hexDump")
+                    frameCount++
+                }
 
                 if (length > 0) {
                     emptyPollCount = 0
@@ -101,7 +127,7 @@ class VideoDecodeThread(
 
                     val nalType = getNalType(frameBuffer)
 
-                    // 4. Buffer SPS/PPS for codec configuration
+                    // 5. Buffer SPS/PPS for codec configuration
                     // We need BOTH SPS and PPS before initializing codec
                     when (nalType) {
                         NAL_TYPE_SPS -> {
@@ -126,7 +152,7 @@ class VideoDecodeThread(
                         }
                     }
 
-                    // 5. If codec not started, we can only buffer config NALs - skip other frames
+                    // 6. If codec not started, we can only buffer config NALs - skip other frames
                     if (!codecStarted) {
                         AppLog.d { "Dropping frame (NAL type $nalType) - codec not configured yet" }
                         continue
@@ -134,7 +160,7 @@ class VideoDecodeThread(
 
                     val isKeyframe = isKeyFrame(frameBuffer)
 
-                    // 6. If waiting for keyframe, drop frames until we see one
+                    // 7. If waiting for keyframe, drop frames until we see one
                     if (waitingForKeyframe) {
                         if (isKeyframe) {
                             waitingForKeyframe = false
@@ -145,9 +171,13 @@ class VideoDecodeThread(
                         }
                     }
 
-                    // 7. Feed to codec
+                    // 8. Feed to codec
                     if (feedInput(frameBuffer, length)) {
                         monitor.onFrameDecoded()
+                    } else {
+                        // Couldn't feed - save as pending to retry after draining output
+                        pendingFrameLength = length
+                        android.util.Log.d("VideoDebug", "feedInput busy, frame len=$length saved as pending")
                     }
                 } else {
                     // Queue empty - use adaptive sleep to balance CPU usage and latency
@@ -162,6 +192,7 @@ class VideoDecodeThread(
             } catch (e: IllegalStateException) {
                 // Codec in bad state - try to recover
                 AppLog.e { "Codec error, attempting recovery: ${e.message}" }
+                pendingFrameLength = 0  // Clear pending on error
                 resetCodec()
 
             } catch (e: Exception) {
@@ -230,6 +261,7 @@ class VideoDecodeThread(
             inputBuffers = codec!!.inputBuffers
             codecStarted = true
 
+            android.util.Log.w("VideoDebug", "Codec initialized with CSD: ${width}x${height}, SDK=${Build.VERSION.SDK_INT}, inputBuffers=${inputBuffers?.size ?: 0}")
             AppLog.i { "Codec initialized with CSD: ${width}x${height}, SDK=${Build.VERSION.SDK_INT}" }
 
         } catch (e: Exception) {
@@ -239,6 +271,9 @@ class VideoDecodeThread(
             codecStarted = false
         }
     }
+
+    // Counter for rendered frames
+    private var renderedFrameCount = 0
 
     /**
      * Consume all available output buffers from codec.
@@ -255,12 +290,19 @@ class VideoDecodeThread(
                     // Render frame immediately for lowest latency in real-time streaming
                     // Vsync alignment adds latency that hurts A/V sync
                     codec.releaseOutputBuffer(index, true)
+                    renderedFrameCount++
+                    if (renderedFrameCount <= 10 || renderedFrameCount % 100 == 0) {
+                        android.util.Log.i("VideoDebug", "drainOutput: RENDERED frame #$renderedFrameCount (size=${codecBufferInfo.size}, flags=${codecBufferInfo.flags})")
+                    }
                 }
                 index == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED -> {
                     // API < 21: output buffers changed, but we don't cache them
+                    android.util.Log.w("VideoDebug", "drainOutput: INFO_OUTPUT_BUFFERS_CHANGED")
                     AppLog.d { "INFO_OUTPUT_BUFFERS_CHANGED" }
                 }
                 index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    val newFormat = codec.outputFormat
+                    android.util.Log.w("VideoDebug", "drainOutput: INFO_OUTPUT_FORMAT_CHANGED: $newFormat")
                     AppLog.d { "INFO_OUTPUT_FORMAT_CHANGED" }
                 }
                 else -> {
@@ -276,14 +318,24 @@ class VideoDecodeThread(
      * Returns true if frame was successfully queued, false if no buffer available.
      */
     private fun feedInput(data: ByteArray, length: Int): Boolean {
-        val codec = this.codec ?: return false
-        val buffers = this.inputBuffers ?: return false
+        val codec = this.codec
+        if (codec == null) {
+            android.util.Log.e("VideoDebug", "feedInput: codec is NULL!")
+            return false
+        }
 
-        // Use 2ms timeout - short for low latency but gives codec a bit of time
-        val inputIndex = codec.dequeueInputBuffer(2_000) // microseconds
+        val buffers = this.inputBuffers
+        if (buffers == null) {
+            android.util.Log.e("VideoDebug", "feedInput: inputBuffers is NULL!")
+            return false
+        }
+
+        // Use 0 timeout (non-blocking) - we'll retry in the next loop iteration
+        // This prevents deadlock: if we block here, we can't drain output, and codec stalls
+        val inputIndex = codec.dequeueInputBuffer(0) // non-blocking
 
         if (inputIndex < 0) {
-            // No buffer available - frame will be lost (rare, only when codec is overwhelmed)
+            android.util.Log.w("VideoDebug", "feedInput: dequeueInputBuffer returned $inputIndex (no buffer available)")
             return false
         }
 
@@ -298,6 +350,9 @@ class VideoDecodeThread(
             System.nanoTime() / 1000, // presentationTimeUs for proper frame timing
             0       // flags
         )
+
+        val nalType = if (length > 4) data[4].toInt() and 0x1f else -1
+        android.util.Log.d("VideoDebug", "feedInput: SUCCESS queued $length bytes (NAL type $nalType) to buffer $inputIndex")
         return true
     }
 

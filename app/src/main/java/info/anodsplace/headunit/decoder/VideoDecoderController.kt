@@ -83,6 +83,8 @@ class VideoDecoderController {
     }
     
     private fun startDecoder(holder: SurfaceHolder, width: Int, height: Int) {
+        android.util.Log.w("VideoDebug", "startDecoder: ${width}x${height}, surface=${holder.surface}, valid=${holder.surface?.isValid}")
+
         // Create components - capacity of 8 frames handles ~130ms at 60fps burst traffic
         frameQueue = VideoFrameQueue(capacity = 30)  // ~500ms at 60fps, absorbs USB jitter
         decodeThread = VideoDecodeThread(
@@ -96,6 +98,7 @@ class VideoDecoderController {
         decodeThread!!.start()
         surfaceReady = true
 
+        android.util.Log.w("VideoDebug", "Video pipeline started: ${width}x${height}")
         AppLog.i { "Video pipeline started: ${width}x${height}" }
     }
 

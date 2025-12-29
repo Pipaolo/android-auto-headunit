@@ -32,24 +32,46 @@ internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
     // Lock for SPS/PPS cache - protects cachedSps, cachedPps, cachedSpsPpsSent
     private val cacheLock = Object()
 
-    // Cache for SPS/PPS NAL units - these are needed to configure the decoder
+    // Cache for SPS/PPS/IDR NAL units - these are needed to configure and start the decoder
     // We buffer them so they're available immediately when the surface becomes ready
     @Volatile private var cachedSps: ByteArray? = null
     @Volatile private var cachedPps: ByteArray? = null
+    @Volatile private var cachedIdr: ByteArray? = null  // First IDR keyframe
     @Volatile private var cachedSpsPpsSent = false
+
+    // For debugging - count frames processed
+    private var processedFrames = 0
 
     fun process(message: AapMessage): Boolean {
         val flags = message.flags.toInt()
         val buf = message.data
         val len = message.size
 
+        // Log first few frames for debugging
+        if (processedFrames < 10) {
+            val hexDump = buf.take(minOf(16, len)).joinToString(" ") { String.format("%02X", it) }
+            android.util.Log.w("VideoDebug", "AapVideo.process: flags=$flags, len=$len, type=${message.type}, first16bytes=$hexDump")
+            processedFrames++
+        }
+
         // For complete frames (flag 11), cache SPS/PPS even if queue not ready
-        if (flags == 11 && isValidNalUnit(buf, 10)) {
-            cacheSpsPpsIfNeeded(buf, 10, len - 10)
+        // Must check BOTH offset 10 (standard) and offset 2 (message.type==1 case)
+        if (flags == 11) {
+            if (isValidNalUnit(buf, 10)) {
+                cacheSpsPpsIfNeeded(buf, 10, len - 10)
+            } else if (message.type == 1 && isValidNalUnit(buf, 2)) {
+                cacheSpsPpsIfNeeded(buf, message.dataOffset, len - message.dataOffset)
+            } else {
+                // Debug: show what's at both offsets when neither matches
+                val at2 = if (len > 6) buf.slice(2..5).joinToString(" ") { String.format("%02X", it) } else "N/A"
+                val at10 = if (len > 14) buf.slice(10..13).joinToString(" ") { String.format("%02X", it) } else "N/A"
+                android.util.Log.w("VideoDebug", "No NAL start code found - at offset 2: [$at2], at offset 10: [$at10]")
+            }
         }
 
         val queue = frameQueue()
         if (queue == null) {
+            android.util.Log.w("VideoDebug", "Frame queue NULL, caching attempted, dropping frame")
             AppLog.d { "Frame queue not ready, dropping video frame" }
             return true // Don't log error, queue may not be ready yet
         }
@@ -161,31 +183,74 @@ internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
     /**
      * Cache SPS and PPS NAL units for later injection when decoder starts.
      * These are essential for decoder configuration.
+     * Scans for ALL NAL units in the data since SPS and PPS may be concatenated.
      */
     private fun cacheSpsPpsIfNeeded(data: ByteArray, offset: Int, length: Int) {
         if (length < 5) return
 
-        val nalType = data[offset + 4].toInt() and 0x1f
+        val end = offset + length
+        var pos = offset
 
-        when (nalType) {
-            NAL_TYPE_SPS -> {
-                synchronized(cacheLock) {
-                    cachedSps = data.copyOfRange(offset, offset + length)
+        // Scan for all NAL start codes (00 00 00 01) in the data
+        while (pos < end - 4) {
+            // Look for NAL start code
+            if (data[pos].toInt() == 0 && data[pos + 1].toInt() == 0 &&
+                data[pos + 2].toInt() == 0 && data[pos + 3].toInt() == 1) {
+                
+                val nalType = data[pos + 4].toInt() and 0x1f
+                
+                // Find next NAL start code to determine this NAL's length
+                var nextNalPos = pos + 4
+                while (nextNalPos < end - 3) {
+                    if (data[nextNalPos].toInt() == 0 && data[nextNalPos + 1].toInt() == 0 &&
+                        data[nextNalPos + 2].toInt() == 0 && data[nextNalPos + 3].toInt() == 1) {
+                        break
+                    }
+                    nextNalPos++
                 }
-                AppLog.i { "Cached SPS NAL unit (${length} bytes)" }
-            }
-            NAL_TYPE_PPS -> {
-                synchronized(cacheLock) {
-                    cachedPps = data.copyOfRange(offset, offset + length)
+                // If no next NAL found, this NAL extends to end
+                if (nextNalPos >= end - 3) nextNalPos = end
+                
+                val nalLength = nextNalPos - pos
+                android.util.Log.w("VideoDebug", "Found NAL at pos=$pos, type=$nalType, length=$nalLength")
+                
+                when (nalType) {
+                    NAL_TYPE_SPS -> {
+                        synchronized(cacheLock) {
+                            cachedSps = data.copyOfRange(pos, pos + nalLength)
+                        }
+                        android.util.Log.w("VideoDebug", "CACHED SPS NAL unit ($nalLength bytes)")
+                        AppLog.i { "Cached SPS NAL unit ($nalLength bytes)" }
+                    }
+                    NAL_TYPE_PPS -> {
+                        synchronized(cacheLock) {
+                            cachedPps = data.copyOfRange(pos, pos + nalLength)
+                        }
+                        android.util.Log.w("VideoDebug", "CACHED PPS NAL unit ($nalLength bytes)")
+                        AppLog.i { "Cached PPS NAL unit ($nalLength bytes)" }
+                    }
+                    NAL_TYPE_IDR -> {
+                        // Cache first IDR so decoder can start immediately when queue is ready
+                        synchronized(cacheLock) {
+                            if (cachedIdr == null) {
+                                cachedIdr = data.copyOfRange(pos, pos + nalLength)
+                                android.util.Log.w("VideoDebug", "CACHED IDR keyframe ($nalLength bytes)")
+                                AppLog.i { "Cached IDR keyframe ($nalLength bytes)" }
+                            }
+                        }
+                    }
                 }
-                AppLog.i { "Cached PPS NAL unit (${length} bytes)" }
+                
+                pos = nextNalPos
+            } else {
+                pos++
             }
         }
     }
 
     /**
-     * Inject cached SPS/PPS into the queue when it first becomes available.
-     * This ensures the decoder can configure immediately without waiting for
+     * Inject cached SPS/PPS/IDR into the queue when it first becomes available.
+     * This ensures the decoder can configure and start immediately without waiting for
      * the next keyframe from the phone.
      */
     private fun injectCachedSpsPps(queue: VideoFrameQueue) {
@@ -194,12 +259,22 @@ internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
 
             val sps = cachedSps
             val pps = cachedPps
+            val idr = cachedIdr
+
+            android.util.Log.w("VideoDebug", "injectCachedSpsPps: sps=${sps?.size ?: "null"}, pps=${pps?.size ?: "null"}, idr=${idr?.size ?: "null"}")
 
             if (sps != null && pps != null) {
-                AppLog.i { "Injecting cached SPS/PPS into queue for immediate decoder config" }
+                android.util.Log.w("VideoDebug", "INJECTING cached SPS (${sps.size} bytes) + PPS (${pps.size} bytes) + IDR (${idr?.size ?: 0} bytes)")
+                AppLog.i { "Injecting cached SPS/PPS/IDR into queue for immediate decoder start" }
                 queue.offer(sps, 0, sps.size)
                 queue.offer(pps, 0, pps.size)
+                // Also inject the first IDR keyframe if we have it
+                if (idr != null) {
+                    queue.offer(idr, 0, idr.size)
+                }
                 cachedSpsPpsSent = true
+            } else {
+                android.util.Log.w("VideoDebug", "Cannot inject - missing SPS or PPS")
             }
         }
     }
@@ -211,6 +286,7 @@ internal class AapVideo(private val frameQueue: () -> VideoFrameQueue?) {
         synchronized(cacheLock) {
             cachedSps = null
             cachedPps = null
+            cachedIdr = null
             cachedSpsPpsSent = false
         }
         synchronized(fragmentLock) {

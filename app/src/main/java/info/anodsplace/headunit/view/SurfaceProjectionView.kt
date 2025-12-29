@@ -76,24 +76,27 @@ class SurfaceProjectionView : SurfaceView, SurfaceHolder.Callback, BaseProjectio
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
+        android.util.Log.w("VideoDebug", "surfaceCreated: view=${width}x${height}, screen=${screenConfig.width}x${screenConfig.height}, SDK=${Build.VERSION.SDK_INT}")
         AppLog.i { "surfaceCreated: view=${width}x${height}, screen=${screenConfig.width}x${screenConfig.height}, SDK=${Build.VERSION.SDK_INT}" }
-        
+
         // Set fixed size to match the video resolution for proper buffer allocation
         // This enables hardware scaler usage which is efficient on all Android versions
         holder.setFixedSize(screenConfig.width, screenConfig.height)
-        
+
         // On Android 5.0+ (API 21), start decoder after posting to allow buffer allocation
         // On pre-Lollipop, we must wait for surfaceChanged when buffers are fully allocated
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             post {
+                android.util.Log.w("VideoDebug", "post: windowToken=$windowToken, decoderStarted=$decoderStarted")
                 if (windowToken != null && !decoderStarted) {
                     decoderStarted = true
+                    android.util.Log.w("VideoDebug", "Starting video decoder via onSurfaceAvailable")
                     videoController.onSurfaceAvailable(holder, screenConfig.width, screenConfig.height)
                 }
             }
         }
         // Pre-Lollipop: decoder will be started in surfaceChanged after BufferQueue is ready
-        
+
         surfaceCallback?.surfaceCreated(holder)
     }
 
