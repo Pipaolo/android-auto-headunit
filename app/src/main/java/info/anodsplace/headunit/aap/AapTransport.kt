@@ -14,6 +14,7 @@ import info.anodsplace.headunit.aap.protocol.proto.Input
 import info.anodsplace.headunit.aap.protocol.proto.Sensors
 import info.anodsplace.headunit.connection.AccessoryConnection
 import info.anodsplace.headunit.connection.AccessoryConnection.Companion.CONNECT_TIMEOUT
+import info.anodsplace.headunit.connection.NativeUsbAccessoryConnection
 import info.anodsplace.headunit.contract.DisconnectIntent
 import info.anodsplace.headunit.contract.ProjectionActivityRequest
 import info.anodsplace.headunit.decoder.AudioDecoder
@@ -42,9 +43,12 @@ class AapTransport(
     }
     private val modeManager: UiModeManager =  context.getSystemService(UI_MODE_SERVICE) as UiModeManager
     private var connection: AccessoryConnection? = null
+    private var nativeConnection: NativeUsbAccessoryConnection? = null
     private var aapRead: AapRead? = null
+    private var messageHandler: AapMessageHandler? = null
     private var handler: Handler? = null
     private val pendingMessages = mutableListOf<AapMessage>()
+    private var useNativeUsb = false
 
     val isAlive: Boolean
         get() = pollThread.isAlive
@@ -126,6 +130,21 @@ class AapTransport(
         synchronized(pendingMessages) {
             pendingMessages.clear()
         }
+        
+        // Clean up native USB if used
+        if (useNativeUsb) {
+            nativeConnection?.let { conn ->
+                conn.onAudioMessage = null
+                conn.onVideoMessage = null
+                conn.onControlMessage = null
+                conn.onDisconnect = null
+                conn.stopReading()
+            }
+            nativeConnection = null
+            messageHandler = null
+            useNativeUsb = false
+        }
+        
         // Notify that we're disconnecting - use LocalBroadcastManager for reliability
         App.provide(context).localBroadcastManager.sendBroadcast(DisconnectIntent())
         // Stop decoders
@@ -166,6 +185,76 @@ class AapTransport(
         this.connection = connection
         pollCount = 0
 
+        // Check if this is a native USB connection
+        if (connection is NativeUsbAccessoryConnection) {
+            return startNativeUsb(connection)
+        }
+        
+        // Legacy poll-based approach for non-native connections
+        return startLegacyPoll(connection)
+    }
+    
+    private fun startNativeUsb(connection: NativeUsbAccessoryConnection): Boolean {
+        AppLog.i { "Starting native USB transport" }
+        useNativeUsb = true
+        nativeConnection = connection
+        
+        // Create message handler
+        messageHandler = AapMessageHandlerImpl(this, micRecorder, aapAudio, aapVideo, settings, context)
+        
+        // Set SSL for decryption
+        connection.ssl = ssl
+        
+        // Set up message callbacks - all callbacks route to the same handler
+        // Native layer already prioritizes audio over video over control
+        connection.onAudioMessage = { message ->
+            try {
+                messageHandler?.handle(message)
+            } catch (e: Exception) {
+                AppLog.e(e) { "Error handling audio message" }
+            }
+        }
+        
+        connection.onVideoMessage = { message ->
+            try {
+                messageHandler?.handle(message)
+            } catch (e: Exception) {
+                AppLog.e(e) { "Error handling video message" }
+            }
+        }
+        
+        connection.onControlMessage = { message ->
+            try {
+                messageHandler?.handle(message)
+            } catch (e: Exception) {
+                AppLog.e(e) { "Error handling control message" }
+            }
+        }
+        
+        connection.onDisconnect = {
+            AppLog.i { "Native USB disconnected" }
+            quit()
+        }
+        
+        // Start the poll thread for sending messages (still needed for outbound)
+        pollThread.start()
+        handler = Handler(pollThread.looper, this)
+        flushPendingMessages()
+        
+        // Start native async reading
+        connection.startReading()
+        
+        // Restart video decoder if surface is still available from previous connection
+        App.provide(context).videoDecoderController.restartIfSurfaceAvailable()
+        
+        AppLog.i { "Native USB transport started successfully" }
+        return true
+    }
+    
+    private fun startLegacyPoll(connection: AccessoryConnection): Boolean {
+        AppLog.i { "Starting legacy poll-based transport" }
+        useNativeUsb = false
+        
         aapRead = AapRead.Factory.create(connection, this, micRecorder, aapAudio, aapVideo, settings, context)
 
         pollThread.start()

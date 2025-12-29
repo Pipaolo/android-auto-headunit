@@ -8,14 +8,26 @@ plugins {
 android {
     namespace 'info.anodsplace.headunit'
     compileSdk 34
+    ndkVersion "25.2.9519653"
 
     defaultConfig {
         applicationId "info.anodsplace.headunit"
-        minSdk 18
+        minSdk 21
         targetSdk 34
 
         versionCode 1
         versionName "1.0"
+
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++17 -fexceptions"
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
     }
 
     buildTypes {
@@ -41,6 +53,13 @@ android {
     buildFeatures {
         viewBinding true
     }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
 }
 
 protobuf {
@@ -64,7 +83,7 @@ dependencies {
     // Conscrypt for modern TLS support on older Android
     implementation 'org.conscrypt:conscrypt-android:2.5.2'
 
-    // Using older versions that support minSdk 18
+    // AndroidX dependencies (minSdk 21+)
     implementation 'androidx.activity:activity-ktx:1.7.2'
     implementation 'androidx.fragment:fragment-ktx:1.5.7'
     implementation 'androidx.media:media:1.6.0'

@@ -16,7 +16,7 @@ import info.anodsplace.headunit.R
 import info.anodsplace.headunit.aap.protocol.messages.NightModeEvent
 import info.anodsplace.headunit.connection.AccessoryConnection
 import info.anodsplace.headunit.connection.SocketAccessoryConnection
-import info.anodsplace.headunit.connection.UsbAccessoryConnection
+import info.anodsplace.headunit.connection.NativeUsbAccessoryConnection
 import info.anodsplace.headunit.connection.UsbReceiver
 import info.anodsplace.headunit.contract.ConnectedIntent
 import info.anodsplace.headunit.location.GpsLocationService
@@ -124,8 +124,8 @@ class AapService : Service(), UsbReceiver.Listener, AccessoryConnection.Listener
     }
 
     override fun onUsbDetach(device: UsbDevice) {
-        if (accessoryConnection is UsbAccessoryConnection) {
-            if ((accessoryConnection as UsbAccessoryConnection).isDeviceRunning(device)) {
+        if (accessoryConnection is NativeUsbAccessoryConnection) {
+            if ((accessoryConnection as NativeUsbAccessoryConnection).isDeviceRunning(device)) {
                 stopSelf()
             }
         }
@@ -187,7 +187,7 @@ class AapService : Service(), UsbReceiver.Listener, AccessoryConnection.Listener
                     return null
                 }
                 val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
-                return UsbAccessoryConnection(usbManager, device)
+                return NativeUsbAccessoryConnection(usbManager, device)
             } else if (connectionType == TYPE_WIFI) {
                 val ip = intent?.getStringExtra(EXTRA_IP) ?: ""
                 return SocketAccessoryConnection(ip)

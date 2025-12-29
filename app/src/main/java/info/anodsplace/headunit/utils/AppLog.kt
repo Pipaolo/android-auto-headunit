@@ -38,5 +38,11 @@ object AppLog {
             Log.e(TAG, "Error", t)
         }
     }
+
+    inline fun e(t: Throwable, messageProducer: MessageProducer) {
+        if (LOG_LEVEL <= Log.ERROR) {
+            Log.e(TAG, messageProducer(), t)
+        }
+    }
 }
 
