@@ -122,34 +122,54 @@ class AapTransport(
 
     internal fun quit() {
         AppLog.i { "Transport quit - cleaning up" }
+
+        // Step 1: Immediately clear callbacks to prevent new messages during cleanup
+        // This MUST happen first to avoid race conditions
         micRecorder.listener = null
-        pollThread.quit()
-        aapRead = null
-        handler = null
-        aapVideo.reset()
-        synchronized(pendingMessages) {
-            pendingMessages.clear()
-        }
-        
-        // Clean up native USB if used
         if (useNativeUsb) {
             nativeConnection?.let { conn ->
                 conn.onAudioMessage = null
                 conn.onVideoMessage = null
                 conn.onControlMessage = null
                 conn.onDisconnect = null
-                conn.stopReading()
             }
+        }
+
+        // Step 2: Stop native USB reading (stops async callbacks)
+        if (useNativeUsb) {
+            nativeConnection?.stopReading()
+        }
+
+        // Step 3: Clear message handler so no further processing occurs
+        messageHandler = null
+        aapRead = null
+
+        // Step 4: Stop poll thread and handler
+        handler = null
+        pollThread.quit()
+
+        // Step 5: Clear pending messages
+        synchronized(pendingMessages) {
+            pendingMessages.clear()
+        }
+
+        // Step 6: Reset video state (safe now that callbacks are cleared)
+        aapVideo.reset()
+
+        // Step 7: Clean up native USB references
+        if (useNativeUsb) {
             nativeConnection = null
-            messageHandler = null
             useNativeUsb = false
         }
-        
-        // Notify that we're disconnecting - use LocalBroadcastManager for reliability
+
+        // Step 8: Notify that we're disconnecting - use LocalBroadcastManager for reliability
         App.provide(context).localBroadcastManager.sendBroadcast(DisconnectIntent())
-        // Stop decoders
+
+        // Step 9: Stop decoders (must be after video reset)
         App.provide(context).audioDecoder.stop()
         App.provide(context).videoDecoderController.stop("AapTransport::quit")
+
+        AppLog.i { "Transport cleanup complete" }
     }
 
     internal fun start(connection: AccessoryConnection): Boolean {

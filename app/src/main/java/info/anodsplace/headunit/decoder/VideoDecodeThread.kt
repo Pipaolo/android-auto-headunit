@@ -37,10 +37,13 @@ class VideoDecodeThread(
 
     // Reusable buffer - no allocation during decode
     private val frameBuffer = ByteArray(VideoFrameQueue.MAX_FRAME_SIZE)
-    
+
     private lateinit var monitor: VideoPerformanceMonitor
 
     @Volatile private var running = false
+
+    // When true, drop all frames until next keyframe to recover from decode errors
+    private var waitingForKeyframe = false
 
     override fun onLooperPrepared() {
         // Set high thread priority for smooth video decoding
@@ -62,9 +65,14 @@ class VideoDecodeThread(
                 // 1. Always drain output first to free buffers and render frames
                 drainOutput()
 
-                // 2. Check if we're falling behind - if queue is backing up, skip non-keyframes
+                // 2. Check if we're falling behind and need to skip to next keyframe
+                // Only check AFTER codec is configured to avoid triggering during startup
                 val queueSize = queue.size()
-                val shouldSkipNonKeyframes = queueSize > 4
+                if (codecConfigured && queueSize > 10 && !waitingForKeyframe) {
+                    // Queue backing up severely - skip to next keyframe to catch up
+                    waitingForKeyframe = true
+                    AppLog.w { "Queue backing up ($queueSize frames), waiting for keyframe" }
+                }
 
                 // 3. Poll queue for new frame
                 val length = queue.poll(frameBuffer)
@@ -72,23 +80,32 @@ class VideoDecodeThread(
                 if (length > 0) {
                     emptyPollCount = 0
 
-                    // 4. Check for SPS to configure codec
+                    val isKeyframe = isKeyFrame(frameBuffer)
+
+                    // 4. If waiting for keyframe, drop frames until we see one
+                    if (waitingForKeyframe) {
+                        if (isKeyframe) {
+                            waitingForKeyframe = false
+                            AppLog.i { "Keyframe received, resuming decode" }
+                        } else {
+                            // Drop this P/B frame - can't decode without reference frames
+                            continue
+                        }
+                    }
+
+                    // 5. Check for SPS to configure codec
                     if (!codecConfigured && isSpsFrame(frameBuffer)) {
                         codecConfigured = true
                         AppLog.i { "Codec configured (SPS received)" }
                     }
 
-                    // 5. When falling behind, only decode keyframes (I-frames) to catch up
-                    val isKeyframe = isKeyFrame(frameBuffer)
-                    if (shouldSkipNonKeyframes && !isKeyframe) {
-                        // Skip this P/B-frame to catch up
-                        continue
-                    }
-
                     // 6. Feed to codec if configured
                     if (codecConfigured) {
-                        feedInput(frameBuffer, length)
-                        monitor.onFrameDecoded()
+                        if (feedInput(frameBuffer, length)) {
+                            monitor.onFrameDecoded()
+                        }
+                        // Note: dropped frames may cause minor artifacts but waiting for
+                        // keyframe would cause multi-second delays - not worth it
                     }
                 } else {
                     // Queue empty - use adaptive sleep to balance CPU usage and latency
@@ -147,18 +164,18 @@ class VideoDecodeThread(
 
     /**
      * Feed a frame to the codec input.
-     * Uses minimal timeout for low latency.
+     * Returns true if frame was successfully queued, false if no buffer available.
      */
-    private fun feedInput(data: ByteArray, length: Int) {
-        val codec = this.codec ?: return
-        val buffers = this.inputBuffers ?: return
+    private fun feedInput(data: ByteArray, length: Int): Boolean {
+        val codec = this.codec ?: return false
+        val buffers = this.inputBuffers ?: return false
 
-        // Very short timeout - 1ms for minimal latency
-        val inputIndex = codec.dequeueInputBuffer(1_000) // microseconds
+        // Use 2ms timeout - short for low latency but gives codec a bit of time
+        val inputIndex = codec.dequeueInputBuffer(2_000) // microseconds
 
         if (inputIndex < 0) {
-            // No buffer available - will retry next loop
-            return
+            // No buffer available - frame will be lost (rare, only when codec is overwhelmed)
+            return false
         }
 
         val buffer = buffers[inputIndex]
@@ -172,6 +189,7 @@ class VideoDecodeThread(
             System.nanoTime() / 1000, // presentationTimeUs for proper frame timing
             0       // flags
         )
+        return true
     }
 
     private fun initCodec() {
@@ -221,12 +239,13 @@ class VideoDecodeThread(
         codec = null
         inputBuffers = null
         codecConfigured = false
-        
+        waitingForKeyframe = true  // Need keyframe after reset
+
         // Brief delay before reinit
         Thread.sleep(100)
-        
+
         initCodec()
-        AppLog.i { "Codec reset complete" }
+        AppLog.i { "Codec reset complete, waiting for keyframe" }
     }
 
     private fun releaseCodec() {
@@ -244,20 +263,33 @@ class VideoDecodeThread(
     }
 
     /**
+     * Check for valid NAL unit start code (0x00 0x00 0x00 0x01).
+     */
+    private fun hasValidStartCode(data: ByteArray): Boolean {
+        return data.size > 4 &&
+            data[0].toInt() == 0 &&
+            data[1].toInt() == 0 &&
+            data[2].toInt() == 0 &&
+            data[3].toInt() == 1
+    }
+
+    /**
      * Check if frame starts with SPS NAL unit (type 7).
+     * Validates start code before checking NAL type.
      */
     private fun isSpsFrame(data: ByteArray): Boolean {
-        // NAL unit header: data[4] contains type in lower 5 bits
+        // Validate start code first, then check NAL type in lower 5 bits
         // Type 7 = Sequence Parameter Set
-        return data.size > 4 && (data[4].toInt() and 0x1f) == 7
+        return hasValidStartCode(data) && (data[4].toInt() and 0x1f) == 7
     }
 
     /**
      * Check if frame is a keyframe (IDR or SPS/PPS).
+     * Validates start code before checking NAL type.
      * NAL types: 5 = IDR (keyframe), 7 = SPS, 8 = PPS
      */
     private fun isKeyFrame(data: ByteArray): Boolean {
-        if (data.size <= 4) return false
+        if (!hasValidStartCode(data)) return false
         val nalType = data[4].toInt() and 0x1f
         return nalType == 5 || nalType == 7 || nalType == 8
     }
