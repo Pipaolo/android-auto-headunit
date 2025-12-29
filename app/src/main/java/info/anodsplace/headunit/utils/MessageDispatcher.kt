@@ -2,12 +2,14 @@ package info.anodsplace.headunit.utils
 
 import android.os.Process
 import info.anodsplace.headunit.aap.AapMessage
-import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 
 /**
  * Dispatches AAP messages to dedicated threads per message type.
  * Decouples message processing from the USB read path to prevent blocking.
+ *
+ * Uses ArrayBlockingQueue for zero-allocation dispatching (important for GC on Android 4.3).
  */
 class MessageDispatcher {
 
@@ -15,8 +17,7 @@ class MessageDispatcher {
 
     data class QueuedMessage(
         val channel: Int,
-        val message: AapMessage,
-        val timestamp: Long = System.nanoTime()
+        val message: AapMessage
     )
 
     private class DispatcherThread(
@@ -24,7 +25,8 @@ class MessageDispatcher {
         val priority: Int,
         val capacity: Int
     ) {
-        val queue = LinkedBlockingQueue<QueuedMessage>(capacity)
+        // ArrayBlockingQueue: no per-message allocation, better cache locality
+        val queue = ArrayBlockingQueue<QueuedMessage>(capacity)
         var thread: Thread? = null
         @Volatile var running = false
         @Volatile var callback: ((AapMessage) -> Unit)? = null
@@ -35,17 +37,17 @@ class MessageDispatcher {
         Type.AUDIO to DispatcherThread(
             name = "AAP-Audio-Dispatch",
             priority = Process.THREAD_PRIORITY_URGENT_AUDIO,
-            capacity = 128  // ~2 seconds of audio frames, absorbs USB jitter
+            capacity = 64  // Smaller queue = lower latency, USB jitter handled by native layer
         ),
         Type.VIDEO to DispatcherThread(
             name = "AAP-Video-Dispatch",
             priority = Process.THREAD_PRIORITY_DISPLAY,
-            capacity = 300  // ~10 seconds at 30fps - video frames must not be dropped
+            capacity = 30  // Video has its own VideoFrameQueue, this is just dispatch buffer
         ),
         Type.CONTROL to DispatcherThread(
             name = "AAP-Control-Dispatch",
-            priority = Process.THREAD_PRIORITY_FOREGROUND,
-            capacity = 128  // touch events, control messages
+            priority = Process.THREAD_PRIORITY_URGENT_DISPLAY, // Higher priority for touch responsiveness
+            capacity = 64  // touch events, control messages
         )
     )
 
@@ -114,8 +116,9 @@ class MessageDispatcher {
 
             while (dispatcher.running) {
                 try {
-                    // Block for up to 100ms, then check running flag
-                    val queued = dispatcher.queue.poll(100, TimeUnit.MILLISECONDS)
+                    // Short timeout for low latency - 10ms max wait
+                    // This is critical for touch responsiveness
+                    val queued = dispatcher.queue.poll(10, TimeUnit.MILLISECONDS)
                     if (queued != null) {
                         dispatcher.callback?.invoke(queued.message)
                     }

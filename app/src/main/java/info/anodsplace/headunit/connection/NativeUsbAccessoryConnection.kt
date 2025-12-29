@@ -41,13 +41,9 @@ class NativeUsbAccessoryConnection(
     private val dispatcher = MessageDispatcher()
 
     // Message handler callbacks (set by AapTransport)
-    // Audio and Control go through dispatcher for decoupled processing
-    // Video bypasses dispatcher - it has its own optimized VideoFrameQueue
-    var onAudioMessage: ((AapMessage) -> Unit)? = null
-        set(value) {
-            field = value
-            dispatcher.setCallback(MessageDispatcher.Type.AUDIO, value)
-        }
+    // Video and Audio bypass dispatcher for lowest latency - they're time-critical
+    // Control goes through dispatcher since it's less latency-sensitive
+    var onAudioMessage: ((AapMessage) -> Unit)? = null  // Called directly for low latency
     var onVideoMessage: ((AapMessage) -> Unit)? = null  // Called directly, not through dispatcher
     var onControlMessage: ((AapMessage) -> Unit)? = null
         set(value) {
@@ -185,11 +181,20 @@ class NativeUsbAccessoryConnection(
         synchronized(fifo) {
             // Add new data to FIFO buffer
             if (fifo.remaining() < length) {
-                AppLog.e { "FIFO buffer overflow, dropping $length bytes" }
-                return
+                AppLog.e { "FIFO buffer overflow, dropping $length bytes (remaining=${fifo.remaining()}, need=$length)" }
+                // Try to recover by processing what we have in the buffer
+                // Don't just return - at least try to parse existing data
+                if (fifo.position() > 0) {
+                    fifo.flip()
+                } else {
+                    // Nothing in buffer to process, clear and return
+                    fifo.clear()
+                    return
+                }
+            } else {
+                fifo.put(data, 0, length)
+                fifo.flip()
             }
-            fifo.put(data, 0, length)
-            fifo.flip()
 
             // Parse headers and collect encrypted payloads (NO decryption here)
             while (fifo.hasRemaining()) {
@@ -251,19 +256,27 @@ class NativeUsbAccessoryConnection(
 
         // OUTSIDE THE LOCK: Decrypt and dispatch all messages
         // TLS decryption must still be sequential, but we're not blocking FIFO access
+        // Use a local header to avoid conflicts with concurrent USB callbacks
+        val decryptHeader = AapMessageIncoming.EncryptedHeader()
         for (pending in pendingMessages) {
             try {
-                // Reconstruct header for decrypt
-                recvHeader.chan = pending.channel
-                recvHeader.flags = pending.flags
-                recvHeader.enc_len = pending.encLen
+                // Set up header for decrypt (using local copy to avoid race with synchronized block)
+                decryptHeader.chan = pending.channel
+                decryptHeader.flags = pending.flags
+                decryptHeader.enc_len = pending.encLen
 
-                val msg = AapMessageIncoming.decrypt(recvHeader, 0, pending.encryptedData, currentSsl)
+                val msg = AapMessageIncoming.decrypt(decryptHeader, 0, pending.encryptedData, currentSsl)
                 if (msg != null) {
                     // Dispatch based on channel type
+                    // Video and Audio bypass dispatcher for lowest latency
                     when {
-                        isVideoChannel(pending.channel) -> onVideoMessage?.invoke(msg)
-                        isAudioChannel(pending.channel) -> dispatcher.dispatch(MessageDispatcher.Type.AUDIO, pending.channel, msg)
+                        isVideoChannel(pending.channel) -> {
+                            onVideoMessage?.invoke(msg)
+                        }
+                        isAudioChannel(pending.channel) -> {
+                            // Direct callback for audio - no queue overhead
+                            onAudioMessage?.invoke(msg)
+                        }
                         else -> dispatcher.dispatch(MessageDispatcher.Type.CONTROL, pending.channel, msg)
                     }
                 } else {
