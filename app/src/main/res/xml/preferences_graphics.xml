@@ -13,14 +13,6 @@
             android:entryValues="@array/resolution_values"
             android:defaultValue="1080" />
 
-        <ListPreference
-            android:key="render_surface"
-            android:title="Render Surface"
-            android:summary="GLES 2.0 for better performance, SurfaceView for compatibility"
-            android:entries="@array/render_surface_entries"
-            android:entryValues="@array/render_surface_values"
-            android:defaultValue="0" />
-
     </PreferenceCategory>
 
     <PreferenceCategory
@@ -74,13 +66,12 @@
     <PreferenceCategory
         android:title="Display">
 
-        <ListPreference
+        <EditTextPreference
             android:key="manual_dpi"
             android:title="DPI Scale"
-            android:summary="Adjust UI element size (Auto = computed with letterbox scaling)"
-            android:entries="@array/dpi_entries"
-            android:entryValues="@array/dpi_string_values"
-            android:defaultValue="0" />
+            android:summary="Enter DPI value (0 = Auto, typical range: 120-480)"
+            android:defaultValue="0"
+            android:inputType="number" />
 
         <SwitchPreferenceCompat
             android:key="night_mode"

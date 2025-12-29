@@ -3,6 +3,7 @@ package info.anodsplace.headunit.ui.settings
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.View
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceManager
 import info.anodsplace.headunit.R
 import info.anodsplace.headunit.utils.AppLog
@@ -26,9 +27,7 @@ class GraphicsSettingsFragment : BaseSettingsFragment(), SharedPreferences.OnSha
         // DPI
         val currentDpi = settings.manualDpi
         prefs.edit().putString("manual_dpi", currentDpi.toString()).apply()
-
-        // Render surface
-        prefs.edit().putString("render_surface", settings.renderSurface.value.toString()).apply()
+        updateDpiSummary(currentDpi)
 
         // Preserve aspect ratio
         prefs.edit().putBoolean("preserve_aspect_ratio", settings.preserveAspectRatio).apply()
@@ -66,10 +65,6 @@ class GraphicsSettingsFragment : BaseSettingsFragment(), SharedPreferences.OnSha
         val dpiString = prefs.getString("manual_dpi", "0") ?: "0"
         settings.manualDpi = dpiString.toIntOrNull() ?: 0
 
-        // Render surface
-        val renderSurfaceString = prefs.getString("render_surface", "0") ?: "0"
-        settings.renderSurface = Settings.RenderSurface.fromInt(renderSurfaceString.toIntOrNull() ?: 0)
-
         // Preserve aspect ratio
         settings.preserveAspectRatio = prefs.getBoolean("preserve_aspect_ratio", true)
 
@@ -88,11 +83,9 @@ class GraphicsSettingsFragment : BaseSettingsFragment(), SharedPreferences.OnSha
         when (key) {
             "manual_dpi" -> {
                 val dpiString = sharedPreferences.getString(key, "0") ?: "0"
-                settings.manualDpi = dpiString.toIntOrNull() ?: 0
-            }
-            "render_surface" -> {
-                val value = sharedPreferences.getString(key, "0") ?: "0"
-                settings.renderSurface = Settings.RenderSurface.fromInt(value.toIntOrNull() ?: 0)
+                val dpiValue = dpiString.toIntOrNull() ?: 0
+                settings.manualDpi = dpiValue
+                updateDpiSummary(dpiValue)
             }
             "preserve_aspect_ratio" -> {
                 settings.preserveAspectRatio = sharedPreferences.getBoolean(key, true)
@@ -109,6 +102,17 @@ class GraphicsSettingsFragment : BaseSettingsFragment(), SharedPreferences.OnSha
             "margin_right" -> {
                 settings.marginRight = sharedPreferences.getInt(key, 0)
             }
+        }
+    }
+
+    private fun updateDpiSummary(dpi: Int) {
+        val prefFragment = childFragmentManager.findFragmentById(R.id.preferences_container)
+        val dpiPref = (prefFragment as? androidx.preference.PreferenceFragmentCompat)
+            ?.findPreference<EditTextPreference>("manual_dpi")
+        dpiPref?.summary = if (dpi == 0) {
+            "Auto (computed based on screen scaling)"
+        } else {
+            "Current: $dpi DPI"
         }
     }
 

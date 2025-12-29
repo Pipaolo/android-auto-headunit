@@ -96,14 +96,6 @@ class Settings(context: Context) { // TODO more settings
             prefs.edit().putStringSet("key-codes", list.toSet()).apply()
         }
 
-    // Render surface type (GLES TextureView or SurfaceView)
-    var renderSurface: RenderSurface
-        get() {
-            val value = prefs.getInt("render-surface", RenderSurface.GLES_TEXTURE_VIEW.value)
-            return RenderSurface.fromInt(value)
-        }
-        set(value) { prefs.edit().putInt("render-surface", value.value).apply() }
-
     // Whether to preserve aspect ratio with letterboxing
     var preserveAspectRatio: Boolean
         get() = prefs.getBoolean("preserve-aspect-ratio", true)
@@ -146,21 +138,6 @@ class Settings(context: Context) { // TODO more settings
         companion object {
             private val map = NightMode.values().associateBy(NightMode::value)
             fun fromInt(value: Int) = map[value]
-        }
-    }
-
-    /**
-     * Render surface type for video projection.
-     * GLES_TEXTURE_VIEW uses GPU-backed TextureView with GLES 2.0 transforms.
-     * SURFACE_VIEW uses the traditional SurfaceView for compatibility.
-     */
-    enum class RenderSurface(val value: Int) {
-        GLES_TEXTURE_VIEW(0),  // Default - better performance with GPU transforms
-        SURFACE_VIEW(1);       // Fallback for compatibility
-
-        companion object {
-            private val map = RenderSurface.values().associateBy(RenderSurface::value)
-            fun fromInt(value: Int) = map[value] ?: GLES_TEXTURE_VIEW
         }
     }
 
