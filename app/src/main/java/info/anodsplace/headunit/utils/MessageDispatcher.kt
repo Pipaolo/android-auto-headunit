@@ -40,7 +40,7 @@ class MessageDispatcher {
         Type.VIDEO to DispatcherThread(
             name = "AAP-Video-Dispatch",
             priority = Process.THREAD_PRIORITY_DISPLAY,
-            capacity = 30  // ~1 second at 30fps
+            capacity = 300  // ~10 seconds at 30fps - video frames must not be dropped
         ),
         Type.CONTROL to DispatcherThread(
             name = "AAP-Control-Dispatch",
