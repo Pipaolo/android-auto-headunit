@@ -156,11 +156,21 @@ class NativeUsbAccessoryConnection(
     }
 
     /**
+     * Pending encrypted message data for decryption outside the FIFO lock.
+     */
+    private data class PendingMessage(
+        val channel: Int,
+        val flags: Int,
+        val encryptedData: ByteArray,
+        val encLen: Int
+    )
+
+    /**
      * Handle raw USB data - parse AAP messages from it.
      * Uses the same proven logic as AapReadMultipleMessages.
      * 
-     * Messages are collected inside the synchronized block, then dispatched
-     * outside the lock to prevent blocking the USB callback.
+     * CRITICAL: Decryption and dispatch happen OUTSIDE the synchronized block
+     * to prevent blocking USB data delivery. Only FIFO buffer operations are locked.
      */
     private fun handleRawData(data: ByteArray, length: Int) {
         val currentSsl = ssl
@@ -169,9 +179,8 @@ class NativeUsbAccessoryConnection(
             return
         }
 
-        // Collect parsed audio/control messages to dispatch outside the lock
-        // (Video is dispatched directly inside the loop for lowest latency)
-        val messages = mutableListOf<Pair<MessageDispatcher.Type, AapMessage>>()
+        // Collect encrypted payloads inside the lock, decrypt outside
+        val pendingMessages = mutableListOf<PendingMessage>()
 
         synchronized(fifo) {
             // Add new data to FIFO buffer
@@ -182,7 +191,7 @@ class NativeUsbAccessoryConnection(
             fifo.put(data, 0, length)
             fifo.flip()
 
-            // Parse complete messages
+            // Parse headers and collect encrypted payloads (NO decryption here)
             while (fifo.hasRemaining()) {
                 fifo.mark()
 
@@ -219,45 +228,50 @@ class NativeUsbAccessoryConnection(
                     break
                 }
 
+                // Copy encrypted data for decryption outside the lock
+                val encryptedCopy = ByteArray(recvHeader.enc_len)
                 try {
-                    fifo.get(msgBuffer, 0, recvHeader.enc_len)
+                    fifo.get(encryptedCopy, 0, recvHeader.enc_len)
                 } catch (e: BufferUnderflowException) {
                     fifo.reset()
                     break
                 }
 
-                // Decrypt message
-                try {
-                    val msg = AapMessageIncoming.decrypt(recvHeader, 0, msgBuffer, currentSsl)
-                    if (msg != null) {
-                        // Video bypasses dispatcher - call directly for lowest latency
-                        // (VideoFrameQueue is its own optimized buffer)
-                        if (isVideoChannel(recvHeader.chan)) {
-                            onVideoMessage?.invoke(msg)
-                        } else {
-                            // Audio and Control go through dispatcher
-                            val type = if (isAudioChannel(recvHeader.chan)) {
-                                MessageDispatcher.Type.AUDIO
-                            } else {
-                                MessageDispatcher.Type.CONTROL
-                            }
-                            messages.add(Pair(type, msg))
-                        }
-                    } else {
-                        AppLog.e { "Decrypt failed: chan=${recvHeader.chan} ${Channel.name(recvHeader.chan)} flags=${recvHeader.flags.toString(16)} enc_len=${recvHeader.enc_len}" }
-                    }
-                } catch (e: Exception) {
-                    AppLog.e(e) { "Error decrypting message on channel ${recvHeader.chan}" }
-                }
+                pendingMessages.add(PendingMessage(
+                    channel = recvHeader.chan,
+                    flags = recvHeader.flags,
+                    encryptedData = encryptedCopy,
+                    encLen = recvHeader.enc_len
+                ))
             }
 
             // Compact buffer (move unprocessed data to beginning)
             fifo.compact()
         }
 
-        // Dispatch audio/control messages OUTSIDE the lock (non-blocking enqueue)
-        messages.forEach { (type, msg) ->
-            dispatcher.dispatch(type, msg.channel, msg)
+        // OUTSIDE THE LOCK: Decrypt and dispatch all messages
+        // TLS decryption must still be sequential, but we're not blocking FIFO access
+        for (pending in pendingMessages) {
+            try {
+                // Reconstruct header for decrypt
+                recvHeader.chan = pending.channel
+                recvHeader.flags = pending.flags
+                recvHeader.enc_len = pending.encLen
+
+                val msg = AapMessageIncoming.decrypt(recvHeader, 0, pending.encryptedData, currentSsl)
+                if (msg != null) {
+                    // Dispatch based on channel type
+                    when {
+                        isVideoChannel(pending.channel) -> onVideoMessage?.invoke(msg)
+                        isAudioChannel(pending.channel) -> dispatcher.dispatch(MessageDispatcher.Type.AUDIO, pending.channel, msg)
+                        else -> dispatcher.dispatch(MessageDispatcher.Type.CONTROL, pending.channel, msg)
+                    }
+                } else {
+                    AppLog.e { "Decrypt failed: chan=${pending.channel} ${Channel.name(pending.channel)} flags=${pending.flags.toString(16)} enc_len=${pending.encLen}" }
+                }
+            } catch (e: Exception) {
+                AppLog.e(e) { "Error decrypting message on channel ${pending.channel}" }
+            }
         }
     }
 
