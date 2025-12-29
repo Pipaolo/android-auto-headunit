@@ -32,20 +32,17 @@ class VideoDecoderController {
      */
     fun onSurfaceAvailable(holder: SurfaceHolder, width: Int, height: Int) {
         synchronized(this) {
-            // Cap height at 1080p (matches original behavior)
-            val cappedHeight = minOf(height, 1080)
-
             // Store for potential restart
             lastHolder = holder
             lastWidth = width
-            lastHeight = cappedHeight
+            lastHeight = height
 
             if (decodeThread != null) {
                 AppLog.i { "Decoder already running" }
                 return
             }
 
-            startDecoder(holder, width, cappedHeight)
+            startDecoder(holder, width, height)
         }
     }
     
@@ -87,7 +84,7 @@ class VideoDecoderController {
     
     private fun startDecoder(holder: SurfaceHolder, width: Int, height: Int) {
         // Create components - capacity of 8 frames handles ~130ms at 60fps burst traffic
-        frameQueue = VideoFrameQueue(capacity = 8)
+        frameQueue = VideoFrameQueue(capacity = 30)  // ~500ms at 60fps, absorbs USB jitter
         decodeThread = VideoDecodeThread(
             queue = frameQueue!!,
             surface = holder.surface,

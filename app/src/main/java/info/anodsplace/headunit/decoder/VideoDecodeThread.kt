@@ -43,8 +43,8 @@ class VideoDecodeThread(
     @Volatile private var running = false
 
     override fun onLooperPrepared() {
-        // Set thread priority for smooth playback
-        Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY)
+        // Set high thread priority for smooth video decoding
+        Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_DISPLAY)
 
         monitor = VideoPerformanceMonitor(queue)
         initCodec()

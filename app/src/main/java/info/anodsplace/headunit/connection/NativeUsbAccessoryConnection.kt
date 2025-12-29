@@ -40,17 +40,15 @@ class NativeUsbAccessoryConnection(
     // Message dispatcher for decoupled processing
     private val dispatcher = MessageDispatcher()
 
-    // Message handler callbacks (set by AapTransport, routed through dispatcher)
+    // Message handler callbacks (set by AapTransport)
+    // Audio and Control go through dispatcher for decoupled processing
+    // Video bypasses dispatcher - it has its own optimized VideoFrameQueue
     var onAudioMessage: ((AapMessage) -> Unit)? = null
         set(value) {
             field = value
             dispatcher.setCallback(MessageDispatcher.Type.AUDIO, value)
         }
-    var onVideoMessage: ((AapMessage) -> Unit)? = null
-        set(value) {
-            field = value
-            dispatcher.setCallback(MessageDispatcher.Type.VIDEO, value)
-        }
+    var onVideoMessage: ((AapMessage) -> Unit)? = null  // Called directly, not through dispatcher
     var onControlMessage: ((AapMessage) -> Unit)? = null
         set(value) {
             field = value
@@ -171,8 +169,9 @@ class NativeUsbAccessoryConnection(
             return
         }
 
-        // Collect parsed messages to dispatch outside the lock
-        val messages = mutableListOf<Triple<MessageDispatcher.Type, Int, AapMessage>>()
+        // Collect parsed audio/control messages to dispatch outside the lock
+        // (Video is dispatched directly inside the loop for lowest latency)
+        val messages = mutableListOf<Pair<MessageDispatcher.Type, AapMessage>>()
 
         synchronized(fifo) {
             // Add new data to FIFO buffer
@@ -231,13 +230,19 @@ class NativeUsbAccessoryConnection(
                 try {
                     val msg = AapMessageIncoming.decrypt(recvHeader, 0, msgBuffer, currentSsl)
                     if (msg != null) {
-                        // Collect message for dispatch outside the lock
-                        val type = when {
-                            isAudioChannel(recvHeader.chan) -> MessageDispatcher.Type.AUDIO
-                            isVideoChannel(recvHeader.chan) -> MessageDispatcher.Type.VIDEO
-                            else -> MessageDispatcher.Type.CONTROL
+                        // Video bypasses dispatcher - call directly for lowest latency
+                        // (VideoFrameQueue is its own optimized buffer)
+                        if (isVideoChannel(recvHeader.chan)) {
+                            onVideoMessage?.invoke(msg)
+                        } else {
+                            // Audio and Control go through dispatcher
+                            val type = if (isAudioChannel(recvHeader.chan)) {
+                                MessageDispatcher.Type.AUDIO
+                            } else {
+                                MessageDispatcher.Type.CONTROL
+                            }
+                            messages.add(Pair(type, msg))
                         }
-                        messages.add(Triple(type, recvHeader.chan, msg))
                     } else {
                         AppLog.e { "Decrypt failed: chan=${recvHeader.chan} ${Channel.name(recvHeader.chan)} flags=${recvHeader.flags.toString(16)} enc_len=${recvHeader.enc_len}" }
                     }
@@ -250,9 +255,9 @@ class NativeUsbAccessoryConnection(
             fifo.compact()
         }
 
-        // Dispatch messages OUTSIDE the lock (non-blocking enqueue)
-        messages.forEach { (type, channel, msg) ->
-            dispatcher.dispatch(type, channel, msg)
+        // Dispatch audio/control messages OUTSIDE the lock (non-blocking enqueue)
+        messages.forEach { (type, msg) ->
+            dispatcher.dispatch(type, msg.channel, msg)
         }
     }
 
